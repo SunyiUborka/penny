@@ -5,3 +5,5 @@ mongo-data/
 .env.*.local
 *.log
 .DS_Store
+backups/*
+!backups/.gitkeep

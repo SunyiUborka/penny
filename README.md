@@ -101,6 +101,7 @@ meghibásodik.
 | `CURRENCY_API_URL` | getgeoapi.com convert végpont URL-je.                                |
 | `NODE_ENV`         | `development` / `production`.                                        |
 | `PORT`             | Backend HTTP port (Docker-en belül, alapértelmezetten 3000).         |
+| `BACKUP_UID/GID`   | Milyen uid/gid-del írjon a `backup` service (lásd lentebb).          |
 
 Lásd `.env.example` a kommentekkel ellátott sablonért. Éles titok (jelszó,
 session secret, API kulcs) sosem kerül a repóba — csak az `.env` fájlba,
@@ -114,6 +115,51 @@ keresztül, TLS nélkül elérve is működik a bejelentkezés — a böngésző
 hoston/IP-n eldobná. Ha reverse proxy (pl. Caddy) mögött, TLS-szel futtatod,
 a `Secure` jelző automatikusan bekapcsol (a `web` service saját Fastify
 szervere a proxy tényleges `X-Forwarded-Proto`-ját továbbítja a backendnek).
+
+## Adatbázis-mentés
+
+A `backup` service óránként készít egy teljes `mongodump`-ot a `filler`
+adatbázisról, és `tar.gz`-ként a `./backups` könyvtárba írja
+`kassza-ÉÉÉÉHHNN-ÓÓPPMM.tar.gz` néven. Ugyanazt a `mongo:7` image-et
+használja, mint az adatbázis, az ütemezést a `scripts/backup.sh` végzi.
+
+Megőrzés (rétegzett, a compose `KEEP_*` változóival hangolható):
+
+- 24 óránál frissebb → minden mentés megmarad
+- 24 óra és 14 nap között → naponta a legfrissebb marad meg
+- 14 napnál régebbi → törlődik
+
+A service hibatűrő: egy elbukott `mongodump` bekerül a logba, de nem állítja
+meg a sorozatot. Hogy a tartós hiba mégse maradjon észrevétlen, a healthcheck
+`unhealthy`-ra vált, ha a legfrissebb mentés 90 percnél régebbi — ezt a
+`docker compose ps` mutatja.
+
+A mentések a `BACKUP_UID` / `BACKUP_GID` (alapértelmezetten `1000:1000`)
+tulajdonában keletkeznek, hogy a hostról is olvashatók és törölhetők
+legyenek. Ha az `id -u` más értéket ad, írd be az `.env`-be.
+
+### Visszaállítás
+
+A `backup` konténerben minden együtt van — látja a `./backups` könyvtárat és
+eléri a `mongo` service-t, tehát se kicsomagolni, se másolni nem kell a
+hoston:
+
+```sh
+docker compose exec backup sh -c '
+  rm -rf /tmp/rt && mkdir -p /tmp/rt
+  tar -xzf /backups/kassza-20260806-012442.tar.gz -C /tmp/rt
+  mongorestore --uri="mongodb://mongo:27017" --drop --nsInclude="filler.*" /tmp/rt/dump
+'
+```
+
+A `--drop` a visszaállítás előtt eldobja az érintett kollekciókat, tehát a
+mentés utáni változások elvesznek. Ha előbb csak meg akarod nézni az
+archívum tartalmát, `--drop` helyett irányítsd egy külön adatbázisba:
+
+```sh
+  mongorestore --uri="mongodb://mongo:27017" \
+    --nsFrom="filler.*" --nsTo="restore_test.*" /tmp/rt/dump
+```
 
 ## Kódminőség
 
