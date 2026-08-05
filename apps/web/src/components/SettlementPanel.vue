@@ -70,10 +70,16 @@ const hasNothingToSettle = computed(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="balance in settlement.balances" :key="balance.personId" class="settlement__row">
+          <tr
+            v-for="balance in settlement.balances"
+            :key="balance.personId"
+            class="settlement__row"
+          >
             <td data-label="Résztvevő">{{ participantName(balance.personId) }}</td>
             <td data-label="Kifizette" class="align-right money">{{ money(balance.paidMinor) }}</td>
-            <td data-label="Rá eső rész" class="align-right money">{{ money(balance.owedMinor) }}</td>
+            <td data-label="Rá eső rész" class="align-right money">
+              {{ money(balance.owedMinor) }}
+            </td>
             <td data-label="Egyenleg" class="align-right">
               <span
                 class="money"

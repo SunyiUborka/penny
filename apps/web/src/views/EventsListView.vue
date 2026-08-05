@@ -88,7 +88,9 @@ async function toggleArchived(event) {
           <td data-label="Név">
             <span class="events__name">{{ event.name }}</span>
           </td>
-          <td data-label="Résztvevők" class="events__participants">{{ participantNames(event) }}</td>
+          <td data-label="Résztvevők" class="events__participants">
+            {{ participantNames(event) }}
+          </td>
           <td
             data-label="Összköltség"
             class="align-right money"
