@@ -1,0 +1,86 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    # Ideiglenes: a host disk (/mnt/WDred) jelenleg majdnem 0 byte szabad
+    # hellyel fut, ami a diagnosztikai adatgyűjtő (FTDC) írási hibáján
+    # keresztül crash-loopba vitte a mongod-ot. Ez a --setParameter csak
+    # kikapcsolja az FTDC-t (nem érint semmilyen tárolt adatot) — vedd ki,
+    # ha felszabadult a hely.
+    command: ['mongod', '--setParameter', 'diagnosticDataCollectionEnabled=false']
+    volumes:
+      - ./mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - '9879:27017'
+    networks:
+      - internal
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      MONGO_URL: mongodb://mongo:27017/filler
+      PORT: 3000
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      API_URL: http://api:3000
+    ports:
+      - '8090:8080'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    labels:
+      caddy: bill.p1ckle.xyz
+      caddy.reverse_proxy: '{{upstreams 8080}}'
+    networks:
+      - caddy
+      - internal
+volumes:
+  mongo-data:
+networks:
+  internal:
+  caddy:
+    external: true

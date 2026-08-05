@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "baseUrl": ".",
+    "paths": {
+      "@filler/shared": ["packages/shared/src/index.js"],
+      "@filler/shared/*": ["packages/shared/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "**/dist"]
+}
