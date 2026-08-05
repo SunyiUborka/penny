@@ -12,8 +12,8 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "git ls-files -zco --exclude-standard | xargs -0r prettier --ignore-unknown --write",
+    "format:check": "git ls-files -zco --exclude-standard | xargs -0r prettier --ignore-unknown --check",
     "build": "npm run build --workspaces --if-present",
     "dev": "docker compose -f compose.yaml -f compose.dev.yaml up --build"
   },

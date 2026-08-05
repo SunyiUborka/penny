@@ -77,13 +77,13 @@ elég egy `docker compose restart backup` — nincs újraépítés.
 
 ### Konfiguráció (environment)
 
-| Változó             | Alapérték                        | Szerepe                        |
-| ------------------- | -------------------------------- | ------------------------------ |
-| `MONGO_URL`         | `mongodb://mongo:27017/filler`   | a dumpolandó adatbázis         |
-| `BACKUP_DIR`        | `/backups`                       | a kimeneti könyvtár            |
-| `TZ`                | `Europe/Budapest`                | a fájlnevek időbélyegének zónája|
-| `KEEP_HOURLY_HOURS` | `24`                             | eddig marad meg minden mentés  |
-| `KEEP_DAILY_DAYS`   | `14`                             | eddig marad meg napi egy       |
+| Változó             | Alapérték                      | Szerepe                          |
+| ------------------- | ------------------------------ | -------------------------------- |
+| `MONGO_URL`         | `mongodb://mongo:27017/filler` | a dumpolandó adatbázis           |
+| `BACKUP_DIR`        | `/backups`                     | a kimeneti könyvtár              |
+| `TZ`                | `Europe/Budapest`              | a fájlnevek időbélyegének zónája |
+| `KEEP_HOURLY_HOURS` | `24`                           | eddig marad meg minden mentés    |
+| `KEEP_DAILY_DAYS`   | `14`                           | eddig marad meg napi egy         |
 
 ### Ütemezés
 
