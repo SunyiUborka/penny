@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import ExpenseModal from './ExpenseModal.vue';
@@ -19,7 +19,16 @@ const saving = ref(false);
 const formError = ref('');
 
 onMounted(() => {
+  // Feliratkozás ELŐBB, mint a lista betöltése: így a két művelet közben
+  // felvitt kiadás sem maradhat le.
+  expensesStore.subscribe(props.event.id);
   expensesStore.fetchExpenses(props.event.id);
+});
+
+// A fülváltás (v-if) lebontja ezt a komponenst, tehát az Elszámolás fülön nem
+// marad nyitva a kapcsolat.
+onUnmounted(() => {
+  expensesStore.unsubscribe(props.event.id);
 });
 
 const filteredExpenses = computed(() => {
@@ -83,6 +92,18 @@ async function handleDelete(expense) {
           </option>
         </select>
       </div>
+      <p
+        class="expense-table__live"
+        :class="{ 'is-offline': !expensesStore.connected }"
+        :title="
+          expensesStore.connected
+            ? 'A más eszközökön felvitt kiadások azonnal megjelennek'
+            : 'Nincs élő kapcsolat — a lista elavult lehet, újrakapcsolódás folyamatban'
+        "
+      >
+        <span class="expense-table__live-dot" aria-hidden="true" />
+        {{ expensesStore.connected ? 'élő' : 'nincs kapcsolat' }}
+      </p>
       <button type="button" class="btn btn--primary" @click="openCreateModal">+ Új kiadás</button>
     </div>
 
@@ -111,6 +132,7 @@ async function handleDelete(expense) {
           v-for="expense in filteredExpenses"
           :key="expense.id"
           class="expense-table__row"
+          :class="{ 'is-fresh': expensesStore.freshIds.has(expense.id) }"
           tabindex="0"
           @click="openEditModal(expense)"
           @keydown.enter="openEditModal(expense)"
@@ -159,6 +181,7 @@ async function handleDelete(expense) {
 .expense-table__toolbar {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   gap: var(--space-4);
   margin-bottom: var(--space-4);
 }
@@ -167,8 +190,35 @@ async function handleDelete(expense) {
   margin-bottom: 0;
 }
 
-.expense-table__toolbar .btn {
-  margin-left: auto;
+/* Halk kapcsolatjelző: enélkül egy halott stream néma hiba lenne — a lista
+   élőnek tűnik, pedig elavult. */
+.expense-table__live {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0 0 0.55em auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.expense-table__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--forint);
+}
+
+.expense-table__live.is-offline {
+  color: var(--stamp);
+}
+
+.expense-table__live.is-offline .expense-table__live-dot {
+  background: none;
+  border: 1.5px solid currentColor;
 }
 
 .expense-table__status {
@@ -217,6 +267,32 @@ async function handleDelete(expense) {
 
 .expense-table__row:hover {
   background: var(--forint-soft);
+}
+
+/* Más eszközön felvitt/szerkesztett kiadás: rövid bankjegy-zöld felvillanás,
+   mintha most ütötték volna bele a bélyegzőt a főkönyvbe. */
+@keyframes expense-arrive {
+  from {
+    background-color: var(--forint-soft);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* Mobil kártyás nézetben a sor alapháttere nem átlátszó, ezért oda külön
+   keyframe kell — különben a felvillanás végén eltűnne a kártya háttere. */
+@keyframes expense-arrive-card {
+  from {
+    background-color: var(--forint-soft);
+  }
+  to {
+    background-color: var(--paper-raised);
+  }
+}
+
+.expense-table__row.is-fresh {
+  animation: expense-arrive 1.6s ease-out;
 }
 
 .btn--small {
@@ -320,6 +396,17 @@ async function handleDelete(expense) {
     grid-column: 1 / -1;
     margin-top: var(--space-2);
     text-align: right;
+  }
+
+  .expense-table__row.is-fresh {
+    animation-name: expense-arrive-card;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expense-table__row.is-fresh {
+    animation: none;
+    background-color: var(--forint-soft);
   }
 }
 </style>

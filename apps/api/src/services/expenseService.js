@@ -2,6 +2,7 @@ import { convertMinorAmount, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
 import { NotFoundError, ValidationError } from '../errors.js';
+import { publishExpenseChange } from './eventBus.js';
 import { parseDateOnly } from '../utils/dateOnly.js';
 
 /**
@@ -20,7 +21,9 @@ export async function createExpense(eventId, input) {
   const event = await getEventOrThrow(eventId);
   assertParticipants(event, input);
   const data = buildExpenseData(input);
-  return expenseRepository.createExpense({ ...data, eventId });
+  const created = await expenseRepository.createExpense({ ...data, eventId });
+  publishExpenseChange(eventId, { type: 'expense.created', expense: created });
+  return created;
 }
 
 /**
@@ -40,6 +43,7 @@ export async function updateExpense(id, input) {
   if (!updated) {
     throw new NotFoundError('Nincs ilyen kiadás.');
   }
+  publishExpenseChange(updated.eventId, { type: 'expense.updated', expense: updated });
   return updated;
 }
 
@@ -51,6 +55,7 @@ export async function deleteExpense(id) {
   if (!deleted) {
     throw new NotFoundError('Nincs ilyen kiadás.');
   }
+  publishExpenseChange(deleted.eventId, { type: 'expense.deleted', expenseId: deleted.id });
 }
 
 /**

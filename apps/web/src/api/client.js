@@ -59,6 +59,16 @@ async function request(method, path, options = {}) {
   return schema ? schema.parse(payload) : payload;
 }
 
+/**
+ * Az SSE streamek teljes URL-je. Az EventSource nem a fetch-alapú `request`
+ * helperen megy át (ezért a 401-kezelés sem érvényes rá), de az API
+ * bázisútvonal így is egy helyen marad.
+ * @param {string} path
+ */
+export function apiStreamUrl(path) {
+  return `${API_BASE}${path}`;
+}
+
 export const apiClient = {
   get: (path, options) => request('GET', path, options),
   post: (path, body, options) => request('POST', path, { ...options, body }),

@@ -433,9 +433,57 @@ maga is hibát dobna fejlesztéskor.
 | `POST`   | `/api/events/:id/expenses`   | ✓       | Új kiadás                                       |
 | `PATCH`  | `/api/expenses/:id`          | ✓       | Kiadás szerkesztése                             |
 | `DELETE` | `/api/expenses/:id`          | ✓       | Kiadás törlése                                  |
+| `GET`    | `/api/events/:id/stream`     | ✓       | Élő kiadás-frissítés (SSE), lásd 9.1            |
 | `GET`    | `/api/events/:id/settlement` | ✓       | Egyenlegek + minimalizált utalás-lista          |
 | `GET`    | `/api/rates?from=&to=`       | ✓       | Árfolyam lekérése (cache-elt vagy élő)          |
 | `GET`    | `/health`                    | –       | Health check (Docker healthcheck-hez)           |
+
+### 9.1 Élő kiadás-frissítés (SSE)
+
+Ha többen néznek egy eseményt (közös utazáson tipikusan mindenki a saját
+telefonján), a más eszközön felvitt kiadás oldalfrissítés nélkül megjelenik.
+A csatorna **egyirányú** (szerver → kliens), ezért Server-Sent Events, nem
+WebSocket: sima HTTP-n megy, a böngésző `EventSource`-a magától
+újrakapcsolódik, és a session cookie same-origin kérésként átmegy — a
+hitelesítést a védett `/api` prefix `requireAuth` hookja adja, extra kód
+nélkül.
+
+```
+POST/PATCH/DELETE ─► expenseService ──► expenseRepository (Mongo)
+                          │
+                          │ publishExpenseChange(eventId, message)
+                          ▼
+                  eventBus (EventEmitter, csatorna: "event:<eventId>")
+                          │
+GET /api/events/:id/stream ◄┘
+                          │
+              EventSource ─► expensesStore ─► ExpenseTable
+```
+
+A pub/sub (`apps/api/src/services/eventBus.js`) szándékosan **memóriában** van,
+külső broker nélkül: egyetlen `api` konténer fut, így nincs mit
+szinkronizálni példányok között. Ha ez megváltozik, ennek a modulnak a
+belsejét kell kicserélni, a felületét nem.
+
+Üzenettípusok — mindhárom a `expenseStreamMessageSchema` (shared) szerint
+validálva **kimenetkor és bejövetkor is**, ahogy a rendes HTTP határátlépések:
+`expense.created`, `expense.updated` (a teljes kiadással), `expense.deleted`
+(csak az azonosítóval).
+
+Két dolog kell ahhoz, hogy a stream a `web` szerver proxyján át is éljen:
+20 mp-enkénti heartbeat komment, és a proxy `undici: { bodyTimeout: 0,
+headersTimeout: 0 }` beállítása (`apps/web/server.js`) — különben az undici
+alapértelmezett időkorlátja elvágja a hosszan élő választ.
+
+**Elmaradt üzenetek:** nincs szerveroldali `Last-Event-ID` puffer. Helyette a
+store újrakapcsolódáskor és a fül előtérbe kerülésekor csendben (a
+„Betöltés…" jelző felvillantása nélkül) újratölti a teljes listát. Ez minden
+szakadás után garantáltan konzisztens állapotot ad, jóval kevesebb kóddal.
+
+A kliens oldali beszúrás idempotens: a saját mutáció után ugyanaz a kiadás az
+SSE-n is visszajön, ezért az `upsertExpense` azonos `id`-re cserél, nem
+duplikál — és az egyező `updatedAt` alapján tudja, hogy ezt a változást már
+mi magunk alkalmaztuk, tehát nem villantja fel újra a sort.
 
 ## 10. Hibakezelés
 
