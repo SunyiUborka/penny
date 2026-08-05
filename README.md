@@ -89,15 +89,15 @@ meghibásodik.
 
 ## Környezeti változók
 
-| Változó             | Leírás                                                               |
-| ------------------- | -------------------------------------------------------------------- |
-| `MONGO_URL`         | Mongo kapcsolati string. Compose-ban `mongodb://mongo:27017/filler`. |
-| `APP_PASSWORD`      | A megosztott jelszó, ember-olvashatóan (lásd fentebb).                |
-| `SESSION_SECRET`    | Hosszú, random string a session cookie aláírásához.                  |
-| `CURRENCY_API_KEY`  | getgeoapi.com API kulcs az árfolyam-lekéréshez.                      |
-| `CURRENCY_API_URL`  | getgeoapi.com convert végpont URL-je.                                |
-| `NODE_ENV`          | `development` / `production`.                                        |
-| `PORT`              | Backend HTTP port (Docker-en belül, alapértelmezetten 3000).         |
+| Változó            | Leírás                                                               |
+| ------------------ | -------------------------------------------------------------------- |
+| `MONGO_URL`        | Mongo kapcsolati string. Compose-ban `mongodb://mongo:27017/filler`. |
+| `APP_PASSWORD`     | A megosztott jelszó, ember-olvashatóan (lásd fentebb).               |
+| `SESSION_SECRET`   | Hosszú, random string a session cookie aláírásához.                  |
+| `CURRENCY_API_KEY` | getgeoapi.com API kulcs az árfolyam-lekéréshez.                      |
+| `CURRENCY_API_URL` | getgeoapi.com convert végpont URL-je.                                |
+| `NODE_ENV`         | `development` / `production`.                                        |
+| `PORT`             | Backend HTTP port (Docker-en belül, alapértelmezetten 3000).         |
 
 Lásd `.env.example` a kommentekkel ellátott sablonért. Éles titok (jelszó,
 session secret, API kulcs) sosem kerül a repóba — csak az `.env` fájlba,

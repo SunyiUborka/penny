@@ -44,17 +44,17 @@ apps/web            Vue 3 SPA + saját kis Fastify kiszolgáló szerver (server.
 packages/shared     Közös Zod sémák, pénz- és elszámolási logika
 ```
 
-| Réteg | Technológia |
-|---|---|
-| Backend keretrendszer | Fastify 5, `fastify-type-provider-zod` |
-| Adatbázis | MongoDB 7 (mongoose ODM) |
-| Validáció | Zod mindenhol — HTTP be-/kimenet, külső API válasz, domain logika |
-| Pénz aritmetika | `decimal.js` (kerekítés), egész `amountMinor` a legkisebb egységben |
-| Jelszó hash | `argon2` (argon2id) |
-| Frontend keretrendszer | Vue 3 (`<script setup>`), Vue Router 4, Pinia |
-| Build | Vite (frontend), natív Node (`node --watch` backend fejlesztéskor) |
-| Konténerizáció | Docker multi-stage build-ek, Docker Compose |
-| Reverse proxy (prod) | Caddy (compose service label-eken keresztül, a repón kívül fut) |
+| Réteg                  | Technológia                                                         |
+| ---------------------- | ------------------------------------------------------------------- |
+| Backend keretrendszer  | Fastify 5, `fastify-type-provider-zod`                              |
+| Adatbázis              | MongoDB 7 (mongoose ODM)                                            |
+| Validáció              | Zod mindenhol — HTTP be-/kimenet, külső API válasz, domain logika   |
+| Pénz aritmetika        | `decimal.js` (kerekítés), egész `amountMinor` a legkisebb egységben |
+| Jelszó hash            | `argon2` (argon2id)                                                 |
+| Frontend keretrendszer | Vue 3 (`<script setup>`), Vue Router 4, Pinia                       |
+| Build                  | Vite (frontend), natív Node (`node --watch` backend fejlesztéskor)  |
+| Konténerizáció         | Docker multi-stage build-ek, Docker Compose                         |
+| Reverse proxy (prod)   | Caddy (compose service label-eken keresztül, a repón kívül fut)     |
 
 Nincs TypeScript. A fordítási idejű típusellenőrzést a **Zod validáció minden
 határátlépésnél** helyettesíti (HTTP be- és kimenet, külső API válasz), a
@@ -415,27 +415,27 @@ maga is hibát dobna fejlesztéskor.
 
 ### API végpontok
 
-| Módszer | Útvonal | Védett? | Leírás |
-|---|---|---|---|
-| `POST` | `/api/auth/login` | – | Bejelentkezés jelszóval, rate-limitelt |
-| `POST` | `/api/auth/logout` | – | Session cookie törlése |
-| `GET` | `/api/auth/me` | – | Aktuális hitelesítési állapot |
-| `GET` | `/api/people` | ✓ | Névjegyzék listázása |
-| `POST` | `/api/people` | ✓ | Új személy (egyedi név, case-insensitive) |
-| `PATCH` | `/api/people/:id` | ✓ | Átnevezés |
-| `DELETE` | `/api/people/:id` | ✓ | Törlés (blokkolva, ha használatban) |
-| `GET` | `/api/events` | ✓ | Események listázása, összköltséggel |
-| `POST` | `/api/events` | ✓ | Új esemény (min. 2 résztvevő) |
-| `GET` | `/api/events/:id` | ✓ | Egy esemény |
-| `PATCH` | `/api/events/:id` | ✓ | Szerkesztés (résztvevő-eltávolítás ellenőrizve) |
-| `DELETE` | `/api/events/:id` | ✓ | Törlés a kiadásaival együtt |
-| `GET` | `/api/events/:id/expenses` | ✓ | Esemény kiadásai |
-| `POST` | `/api/events/:id/expenses` | ✓ | Új kiadás |
-| `PATCH` | `/api/expenses/:id` | ✓ | Kiadás szerkesztése |
-| `DELETE` | `/api/expenses/:id` | ✓ | Kiadás törlése |
-| `GET` | `/api/events/:id/settlement` | ✓ | Egyenlegek + minimalizált utalás-lista |
-| `GET` | `/api/rates?from=&to=` | ✓ | Árfolyam lekérése (cache-elt vagy élő) |
-| `GET` | `/health` | – | Health check (Docker healthcheck-hez) |
+| Módszer  | Útvonal                      | Védett? | Leírás                                          |
+| -------- | ---------------------------- | ------- | ----------------------------------------------- |
+| `POST`   | `/api/auth/login`            | –       | Bejelentkezés jelszóval, rate-limitelt          |
+| `POST`   | `/api/auth/logout`           | –       | Session cookie törlése                          |
+| `GET`    | `/api/auth/me`               | –       | Aktuális hitelesítési állapot                   |
+| `GET`    | `/api/people`                | ✓       | Névjegyzék listázása                            |
+| `POST`   | `/api/people`                | ✓       | Új személy (egyedi név, case-insensitive)       |
+| `PATCH`  | `/api/people/:id`            | ✓       | Átnevezés                                       |
+| `DELETE` | `/api/people/:id`            | ✓       | Törlés (blokkolva, ha használatban)             |
+| `GET`    | `/api/events`                | ✓       | Események listázása, összköltséggel             |
+| `POST`   | `/api/events`                | ✓       | Új esemény (min. 2 résztvevő)                   |
+| `GET`    | `/api/events/:id`            | ✓       | Egy esemény                                     |
+| `PATCH`  | `/api/events/:id`            | ✓       | Szerkesztés (résztvevő-eltávolítás ellenőrizve) |
+| `DELETE` | `/api/events/:id`            | ✓       | Törlés a kiadásaival együtt                     |
+| `GET`    | `/api/events/:id/expenses`   | ✓       | Esemény kiadásai                                |
+| `POST`   | `/api/events/:id/expenses`   | ✓       | Új kiadás                                       |
+| `PATCH`  | `/api/expenses/:id`          | ✓       | Kiadás szerkesztése                             |
+| `DELETE` | `/api/expenses/:id`          | ✓       | Kiadás törlése                                  |
+| `GET`    | `/api/events/:id/settlement` | ✓       | Egyenlegek + minimalizált utalás-lista          |
+| `GET`    | `/api/rates?from=&to=`       | ✓       | Árfolyam lekérése (cache-elt vagy élő)          |
+| `GET`    | `/health`                    | –       | Health check (Docker healthcheck-hez)           |
 
 ## 10. Hibakezelés
 

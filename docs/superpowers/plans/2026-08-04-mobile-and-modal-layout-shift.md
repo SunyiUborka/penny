@@ -22,6 +22,7 @@
 ### Task 1: Anchor both modals to the top of the viewport instead of centering
 
 **Files:**
+
 - Modify: `apps/web/src/components/ExpenseModal.vue:440-455` (`<style scoped>` block, `.modal-backdrop` and `.modal` rules)
 - Modify: `apps/web/src/components/EventFormModal.vue:134-149` (`<style scoped>` block, `.modal-backdrop` and `.modal` rules)
 
@@ -128,6 +129,7 @@ Run the dev server. Open an event, click "+ Új kiadás" to open `ExpenseModal`.
 ### Task 2: Reserve layout space for the async rate error and base-amount preview in `ExpenseModal.vue`
 
 **Files:**
+
 - Modify: `apps/web/src/components/ExpenseModal.vue` (template lines ~379-387, `<style scoped>` block)
 
 **Interfaces:** None — wraps existing `rateError` and `baseAmountPreview` reactive values (already defined in this file) in non-conditional container elements; no new props/emits.
@@ -137,17 +139,17 @@ Run the dev server. Open an event, click "+ Új kiadás" to open `ExpenseModal`.
 Replace:
 
 ```html
-          <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
-          <span class="eyebrow expense-modal__rate-source">
+<p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
+<span class="eyebrow expense-modal__rate-source"></span>
 ```
 
 with:
 
 ```html
-          <div class="expense-modal__rate-error-slot">
-            <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
-          </div>
-          <span class="eyebrow expense-modal__rate-source">
+<div class="expense-modal__rate-error-slot">
+  <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
+</div>
+<span class="eyebrow expense-modal__rate-source"></span>
 ```
 
 - [ ] **Step 2: Wrap the base-amount preview in a reserved-height slot**
@@ -155,19 +157,19 @@ with:
 Replace:
 
 ```html
-        <p v-if="baseAmountPreview !== null" class="expense-modal__preview">
-          Alapvaluta-összeg: <span class="money money--credit">{{ baseAmountPreviewLabel }}</span>
-        </p>
+<p v-if="baseAmountPreview !== null" class="expense-modal__preview">
+  Alapvaluta-összeg: <span class="money money--credit">{{ baseAmountPreviewLabel }}</span>
+</p>
 ```
 
 with:
 
 ```html
-        <div class="expense-modal__preview-slot">
-          <p v-if="baseAmountPreview !== null" class="expense-modal__preview">
-            Alapvaluta-összeg: <span class="money money--credit">{{ baseAmountPreviewLabel }}</span>
-          </p>
-        </div>
+<div class="expense-modal__preview-slot">
+  <p v-if="baseAmountPreview !== null" class="expense-modal__preview">
+    Alapvaluta-összeg: <span class="money money--credit">{{ baseAmountPreviewLabel }}</span>
+  </p>
+</div>
 ```
 
 - [ ] **Step 3: Add the reserved-height CSS**
@@ -193,9 +195,11 @@ Run the dev server, open "+ Új kiadás", set currency to something other than H
 ### Task 3: Collapse the top nav's links behind a hamburger button on mobile
 
 **Files:**
+
 - Modify: `apps/web/src/App.vue` (script block, template, `<style scoped>` block)
 
 **Interfaces:**
+
 - Produces: `mobileMenuOpen` (ref\<boolean\>) — local UI state, not consumed elsewhere.
 
 - [ ] **Step 1: Add mobile menu state and auto-close-on-navigation to the script block**
@@ -255,52 +259,52 @@ import { computed, ref, watch } from 'vue';
 Replace:
 
 ```html
-  <header v-if="showNav" class="app-nav">
-    <router-link to="/" class="app-nav__mark">Kassza</router-link>
-    <nav class="app-nav__tabs">
-      <router-link to="/" class="app-nav__tab">Események</router-link>
-      <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
-    </nav>
-    <button
-      type="button"
-      class="app-nav__theme-toggle"
-      :aria-label="theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'"
-      @click="handleToggleTheme"
-    >
-      {{ theme === 'dark' ? '☀' : '☾' }}
-    </button>
-    <button type="button" class="app-nav__logout" @click="handleLogout">Kilépés</button>
-  </header>
+<header v-if="showNav" class="app-nav">
+  <router-link to="/" class="app-nav__mark">Kassza</router-link>
+  <nav class="app-nav__tabs">
+    <router-link to="/" class="app-nav__tab">Események</router-link>
+    <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
+  </nav>
+  <button
+    type="button"
+    class="app-nav__theme-toggle"
+    :aria-label="theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'"
+    @click="handleToggleTheme"
+  >
+    {{ theme === 'dark' ? '☀' : '☾' }}
+  </button>
+  <button type="button" class="app-nav__logout" @click="handleLogout">Kilépés</button>
+</header>
 ```
 
 with:
 
 ```html
-  <header v-if="showNav" class="app-nav">
-    <router-link to="/" class="app-nav__mark">Kassza</router-link>
-    <button
-      type="button"
-      class="app-nav__menu-toggle"
-      aria-label="Menü megnyitása"
-      :aria-expanded="mobileMenuOpen"
-      @click="mobileMenuOpen = !mobileMenuOpen"
-    >
-      {{ mobileMenuOpen ? '✕' : '☰' }}
-    </button>
-    <nav class="app-nav__tabs" :class="{ 'is-open': mobileMenuOpen }">
-      <router-link to="/" class="app-nav__tab">Események</router-link>
-      <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
-    </nav>
-    <button
-      type="button"
-      class="app-nav__theme-toggle"
-      :aria-label="theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'"
-      @click="handleToggleTheme"
-    >
-      {{ theme === 'dark' ? '☀' : '☾' }}
-    </button>
-    <button type="button" class="app-nav__logout" @click="handleLogout">Kilépés</button>
-  </header>
+<header v-if="showNav" class="app-nav">
+  <router-link to="/" class="app-nav__mark">Kassza</router-link>
+  <button
+    type="button"
+    class="app-nav__menu-toggle"
+    aria-label="Menü megnyitása"
+    :aria-expanded="mobileMenuOpen"
+    @click="mobileMenuOpen = !mobileMenuOpen"
+  >
+    {{ mobileMenuOpen ? '✕' : '☰' }}
+  </button>
+  <nav class="app-nav__tabs" :class="{ 'is-open': mobileMenuOpen }">
+    <router-link to="/" class="app-nav__tab">Események</router-link>
+    <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
+  </nav>
+  <button
+    type="button"
+    class="app-nav__theme-toggle"
+    :aria-label="theme === 'dark' ? 'Váltás világos módra' : 'Váltás sötét módra'"
+    @click="handleToggleTheme"
+  >
+    {{ theme === 'dark' ? '☀' : '☾' }}
+  </button>
+  <button type="button" class="app-nav__logout" @click="handleLogout">Kilépés</button>
+</header>
 ```
 
 - [ ] **Step 3: Add the menu-toggle button style and mobile media query**
@@ -384,6 +388,7 @@ Run the dev server, resize the browser to ~375px wide. Confirm the header shows:
 ### Task 4: Mobile card view for the events table (`EventsListView.vue`)
 
 **Files:**
+
 - Modify: `apps/web/src/views/EventsListView.vue` (template lines ~62-104, `<style scoped>` block)
 
 **Interfaces:** None — template/CSS-only, reuses the existing `ledger-table` global class and the card-pattern already proven in `apps/web/src/components/ExpenseTable.vue:227-294`.
@@ -393,25 +398,25 @@ Run the dev server, resize the browser to ~375px wide. Confirm the header shows:
 Replace the table's opening tag:
 
 ```html
-    <table v-else class="ledger-table">
+<table v-else class="ledger-table"></table>
 ```
 
 with:
 
 ```html
-    <table v-else class="ledger-table events__table">
+<table v-else class="ledger-table events__table"></table>
 ```
 
 Replace the row's opening tag:
 
 ```html
-        <tr v-for="event in eventsStore.events" :key="event.id">
+<tr v-for="event in eventsStore.events" :key="event.id"></tr>
 ```
 
 with:
 
 ```html
-        <tr v-for="event in eventsStore.events" :key="event.id" class="events__row">
+<tr v-for="event in eventsStore.events" :key="event.id" class="events__row"></tr>
 ```
 
 - [ ] **Step 2: Add `data-label` attributes to every cell**
@@ -419,34 +424,27 @@ with:
 Replace the six `<td>` opening tags in the row (keep their existing content and classes exactly as-is) with labeled versions:
 
 ```html
-          <td data-label="Név">
-            <router-link :to="`/events/${event.id}`" class="events__name">{{
-              event.name
-            }}</router-link>
-          </td>
-          <td data-label="Résztvevők" class="events__participants">{{ participantNames(event) }}</td>
-          <td
-            data-label="Összköltség"
-            class="align-right money"
-            :class="event.totalBaseAmountMinor > 0 ? 'money--credit' : ''"
-          >
-            {{
-              formatMoney({
-                amountMinor: event.totalBaseAmountMinor,
-                currency: SETTLEMENT_CURRENCY,
-              })
-            }}
-          </td>
-          <td data-label="Kezdő dátum" class="money">{{ formatDate(event.startDate) }}</td>
-          <td data-label="Állapot">
-            <span v-if="event.archived" class="stamp stamp--muted">Archivált</span>
-            <span v-else class="events__active">Aktív</span>
-          </td>
-          <td data-label="" class="align-right">
-            <button type="button" class="btn btn--ghost btn--small" @click="toggleArchived(event)">
-              {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
-            </button>
-          </td>
+<td data-label="Név">
+  <router-link :to="`/events/${event.id}`" class="events__name">{{ event.name }}</router-link>
+</td>
+<td data-label="Résztvevők" class="events__participants">{{ participantNames(event) }}</td>
+<td
+  data-label="Összköltség"
+  class="align-right money"
+  :class="event.totalBaseAmountMinor > 0 ? 'money--credit' : ''"
+>
+  {{ formatMoney({ amountMinor: event.totalBaseAmountMinor, currency: SETTLEMENT_CURRENCY, }) }}
+</td>
+<td data-label="Kezdő dátum" class="money">{{ formatDate(event.startDate) }}</td>
+<td data-label="Állapot">
+  <span v-if="event.archived" class="stamp stamp--muted">Archivált</span>
+  <span v-else class="events__active">Aktív</span>
+</td>
+<td data-label="" class="align-right">
+  <button type="button" class="btn btn--ghost btn--small" @click="toggleArchived(event)">
+    {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
+  </button>
+</td>
 ```
 
 - [ ] **Step 3: Add the mobile card CSS**
@@ -528,6 +526,7 @@ Run the dev server, go to the events list with at least one event, resize to ~37
 ### Task 5: Mobile card view for the settlement table (`SettlementPanel.vue`)
 
 **Files:**
+
 - Modify: `apps/web/src/components/SettlementPanel.vue` (template lines ~63-93, `<style scoped>` block)
 
 **Interfaces:** None — template/CSS-only.
@@ -537,53 +536,49 @@ Run the dev server, go to the events list with at least one event, resize to ~37
 Replace:
 
 ```html
-        <tbody>
-          <tr v-for="balance in settlement.balances" :key="balance.personId">
-            <td>{{ participantName(balance.personId) }}</td>
-            <td class="align-right money">{{ money(balance.paidMinor) }}</td>
-            <td class="align-right money">{{ money(balance.owedMinor) }}</td>
-            <td class="align-right">
-              <span
-                class="money"
-                :class="{
+<tbody>
+  <tr v-for="balance in settlement.balances" :key="balance.personId">
+    <td>{{ participantName(balance.personId) }}</td>
+    <td class="align-right money">{{ money(balance.paidMinor) }}</td>
+    <td class="align-right money">{{ money(balance.owedMinor) }}</td>
+    <td class="align-right">
+      <span
+        class="money"
+        :class="{
                   'money--credit': balance.balanceMinor > 0,
                   'money--debit': balance.balanceMinor < 0,
                 }"
-              >
-                {{ money(balance.balanceMinor) }}
-              </span>
-              <span class="settlement__balance-status">{{
-                balanceStatus(balance.balanceMinor)
-              }}</span>
-            </td>
-          </tr>
-        </tbody>
+      >
+        {{ money(balance.balanceMinor) }}
+      </span>
+      <span class="settlement__balance-status">{{ balanceStatus(balance.balanceMinor) }}</span>
+    </td>
+  </tr>
+</tbody>
 ```
 
 with:
 
 ```html
-        <tbody>
-          <tr v-for="balance in settlement.balances" :key="balance.personId" class="settlement__row">
-            <td data-label="Résztvevő">{{ participantName(balance.personId) }}</td>
-            <td data-label="Kifizette" class="align-right money">{{ money(balance.paidMinor) }}</td>
-            <td data-label="Rá eső rész" class="align-right money">{{ money(balance.owedMinor) }}</td>
-            <td data-label="Egyenleg" class="align-right">
-              <span
-                class="money"
-                :class="{
+<tbody>
+  <tr v-for="balance in settlement.balances" :key="balance.personId" class="settlement__row">
+    <td data-label="Résztvevő">{{ participantName(balance.personId) }}</td>
+    <td data-label="Kifizette" class="align-right money">{{ money(balance.paidMinor) }}</td>
+    <td data-label="Rá eső rész" class="align-right money">{{ money(balance.owedMinor) }}</td>
+    <td data-label="Egyenleg" class="align-right">
+      <span
+        class="money"
+        :class="{
                   'money--credit': balance.balanceMinor > 0,
                   'money--debit': balance.balanceMinor < 0,
                 }"
-              >
-                {{ money(balance.balanceMinor) }}
-              </span>
-              <span class="settlement__balance-status">{{
-                balanceStatus(balance.balanceMinor)
-              }}</span>
-            </td>
-          </tr>
-        </tbody>
+      >
+        {{ money(balance.balanceMinor) }}
+      </span>
+      <span class="settlement__balance-status">{{ balanceStatus(balance.balanceMinor) }}</span>
+    </td>
+  </tr>
+</tbody>
 ```
 
 - [ ] **Step 2: Add the mobile card + coupon-wrap CSS**
@@ -652,6 +647,7 @@ Run the dev server, open an event's "Elszámolás" tab with at least one balance
 ### Task 6: Stack the event detail header and widen the ledger tabs on mobile (`EventDetailView.vue`)
 
 **Files:**
+
 - Modify: `apps/web/src/views/EventDetailView.vue` (`<style scoped>` block)
 
 **Interfaces:** None — CSS-only, no template changes needed.
