@@ -25,6 +25,9 @@ kinek mennyit fizet a kiegyenlítéshez.
   űrlapja — a settlementet nem érinti. HUF-ban rögzített kiadásnál nincs
   API-hívás. Az összeg legfeljebb 999999 lehet (6 számjegy). Fizető szerinti
   szűrés, mobilon kártyás nézet.
+- Élő frissítés: ha valaki más eszközön vesz fel, módosít vagy töröl egy
+  kiadást, az a nyitva hagyott kiadáslistában oldalfrissítés nélkül megjelenik
+  (Server-Sent Events). A toolbar halk jelzője mutatja, áll-e a kapcsolat.
 - Árfolyam-lekérés külső API-ból (getgeoapi.com), napi Mongo cache-eléssel és
   hibatűrő fallbackkel a legutóbbi ismert árfolyamra.
 - Elszámolás fül: egyenlegtábla és minimalizált "ki fizet kinek mennyit"

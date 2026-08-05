@@ -29,6 +29,11 @@ await app.register(fastifyProxy, {
   upstream: API_URL,
   prefix: '/api',
   rewritePrefix: '/api',
+  // Az élő frissítés SSE streamje (/api/events/:id/stream) órákig nyitva
+  // marad, és adat helyett csak 20 mp-enkénti heartbeatet küld. Az undici
+  // alapértelmezett body/headers timeoutja egy ilyen kapcsolatot elvágna —
+  // a 0 azt jelenti: nincs időkorlát.
+  undici: { bodyTimeout: 0, headersTimeout: 0 },
   replyOptions: {
     rewriteRequestHeaders: (originalReq, headers) => ({
       ...headers,

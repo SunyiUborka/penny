@@ -53,3 +53,14 @@ export const expenseResponseSchema = z.object({
 });
 
 export const expenseListResponseSchema = z.array(expenseResponseSchema);
+
+/**
+ * Az élő (SSE) kiadás-frissítés üzenetformátuma. Ugyanez a séma validál a
+ * backenden kimenetkor és a frontenden bejövetkor — a stream is
+ * határátlépés, ugyanúgy validált, mint a rendes HTTP válaszok.
+ */
+export const expenseStreamMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('expense.created'), expense: expenseResponseSchema }),
+  z.object({ type: z.literal('expense.updated'), expense: expenseResponseSchema }),
+  z.object({ type: z.literal('expense.deleted'), expenseId: personIdSchema }),
+]);
