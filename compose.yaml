@@ -46,11 +46,7 @@ services:
     healthcheck:
       # A service hibatűrő, tehát bukó mentések mellett is futva marad. Ez
       # teszi láthatóvá, ha tartósan nem születik friss archívum.
-      test:
-        [
-          'CMD-SHELL',
-          'find /backups -name "kassza-*.tar.gz" -mmin -90 | grep -q .',
-        ]
+      test: ['CMD-SHELL', 'find /backups -name "kassza-*.tar.gz" -mmin -90 | grep -q .']
       interval: 5m
       timeout: 10s
       retries: 2
