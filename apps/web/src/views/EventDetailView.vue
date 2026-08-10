@@ -106,9 +106,13 @@ async function handleDelete() {
         </div>
       </header>
 
-      <nav class="ledger-tabs">
+      <nav class="ledger-tabs" role="tablist" aria-label="Esemény nézetek">
         <button
+          id="tab-expenses"
           type="button"
+          role="tab"
+          aria-controls="panel-event"
+          :aria-selected="activeTab === 'expenses'"
           class="ledger-tabs__tab"
           :class="{ 'is-active': activeTab === 'expenses' }"
           @click="activeTab = 'expenses'"
@@ -116,7 +120,11 @@ async function handleDelete() {
           Kiadások
         </button>
         <button
+          id="tab-settlement"
           type="button"
+          role="tab"
+          aria-controls="panel-event"
+          :aria-selected="activeTab === 'settlement'"
           class="ledger-tabs__tab"
           :class="{ 'is-active': activeTab === 'settlement' }"
           @click="activeTab = 'settlement'"
@@ -125,7 +133,12 @@ async function handleDelete() {
         </button>
       </nav>
 
-      <section class="event-detail__panel">
+      <section
+        id="panel-event"
+        class="event-detail__panel"
+        role="tabpanel"
+        :aria-labelledby="activeTab === 'expenses' ? 'tab-expenses' : 'tab-settlement'"
+      >
         <ExpenseTable v-if="activeTab === 'expenses'" :event="event" :people="peopleStore.people" />
         <SettlementPanel v-else :event="event" :people="peopleStore.people" />
       </section>
@@ -186,33 +199,66 @@ async function handleDelete() {
 
 .ledger-tabs {
   display: flex;
+  align-items: flex-end;
   gap: 0.25rem;
+  padding-left: 0.25rem;
   border-bottom: 2px solid var(--ink);
   margin-top: var(--space-6);
 }
 
+/* Inaktív fül: hátrasüllyedt dossziéfül — a lapnál sötétebb, tompa, lejjebb. */
 .ledger-tabs__tab {
+  position: relative;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.6em 1.2em;
+  padding: 0.55em 1.2em;
   border: 1.5px solid var(--rule-strong);
   border-bottom: none;
   border-radius: 4px 4px 0 0;
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 87%, #000);
   color: var(--ink-soft);
   cursor: pointer;
-  transform: translateY(2px);
+  box-shadow: inset 0 -7px 8px -7px rgb(0 0 0 / 25%);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
+.ledger-tabs__tab:hover:not(.is-active) {
+  background: color-mix(in srgb, var(--paper) 96%, #000);
+  color: var(--ink);
+}
+
+/* Aktív fül: teljes magasságban előre jön, és egy testet alkot a panellel. */
 .ledger-tabs__tab.is-active {
   background: var(--paper-raised);
   border-color: var(--ink);
   color: var(--ink);
   font-weight: 700;
-  transform: translateY(0);
+  padding: 0.75em 1.4em 0.65em;
+  box-shadow: none;
+  z-index: 1;
+}
+
+/*
+ * Papírszínű illesztés minden fül alján. Az inaktív fülnél a záróvonal fölé
+ * esik (a vonal előtte fut → hátul van), az aktívnál átvágja a vonalat.
+ */
+.ledger-tabs__tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--paper-raised);
+}
+
+.ledger-tabs__tab.is-active::after {
+  bottom: -2px;
 }
 
 .event-detail__panel {
@@ -247,7 +293,11 @@ async function handleDelete() {
   .ledger-tabs__tab {
     flex: 1;
     text-align: center;
-    padding: 0.6em 0.5em;
+    padding: 0.55em 0.5em;
+  }
+
+  .ledger-tabs__tab.is-active {
+    padding: 0.75em 0.5em 0.65em;
   }
 }
 </style>
