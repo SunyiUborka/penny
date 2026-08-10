@@ -227,9 +227,12 @@ async function handleDelete() {
     color 0.12s ease;
 }
 
-.ledger-tabs__tab:hover:not(.is-active) {
-  background: color-mix(in srgb, var(--paper) 96%, #000);
-  color: var(--ink);
+/* Hover csak igazi kurzorral: érintésnél beragadna a fülön a kiemelés. */
+@media (hover: hover) and (pointer: fine) {
+  .ledger-tabs__tab:hover:not(.is-active) {
+    background: color-mix(in srgb, var(--paper) 96%, #000);
+    color: var(--ink);
+  }
 }
 
 /* Aktív fül: teljes magasságban előre jön, és egy testet alkot a panellel. */

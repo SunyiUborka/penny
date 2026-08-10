@@ -182,8 +182,11 @@ async function toggleArchived(event) {
   cursor: pointer;
 }
 
-.events__row:hover {
-  background: var(--forint-soft);
+/* Hover csak igazi kurzorral: érintésnél beragadna a kiemelés. */
+@media (hover: hover) and (pointer: fine) {
+  .events__row:hover {
+    background: var(--forint-soft);
+  }
 }
 
 .events__name {

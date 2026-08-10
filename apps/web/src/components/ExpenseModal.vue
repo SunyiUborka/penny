@@ -521,9 +521,13 @@ onUnmounted(() => {
     color 0.15s ease;
 }
 
-.participant-chip:hover:not(:disabled) {
-  border-color: var(--forint);
-  color: var(--forint);
+/* Hover csak igazi kurzorral: érintésnél a koppintás után beragadna, és a
+   nagyobb specificitása miatt elnyomná a .is-selected zöld kitöltést. */
+@media (hover: hover) and (pointer: fine) {
+  .participant-chip:hover:not(:disabled) {
+    border-color: var(--forint);
+    color: var(--forint);
+  }
 }
 
 .participant-chip:disabled {
