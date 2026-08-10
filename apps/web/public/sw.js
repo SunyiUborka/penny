@@ -24,6 +24,22 @@ async function putInCache(key, response) {
 }
 
 /**
+ * A szerver `setNotFoundHandler`-je (lásd server.js) minden ismeretlen
+ * útvonalra 200-as index.html-t ad vissza — nincs valódi 404. Ha ez a
+ * fallback egy /assets/* kérésre vagy egy navigációra "rossz" tartalommal
+ * érkezik (pl. egy törölt hashelt fájlra), a `response.ok` check önmagában
+ * nem szűri ki: ok=true, csak a tartalom nem az, amit a kérő várt. Ezért
+ * minden cache-írás előtt a Content-Type-ot is ellenőrizzük, hogy a
+ * cache-first assetStrategy ne ragadjon be egy HTML héjra, és a navigációs
+ * fallback ne váljon egy JS/CSS fájllá.
+ * @param {Response} response
+ * @returns {boolean}
+ */
+function isHtmlResponse(response) {
+  return (response.headers.get('Content-Type') ?? '').includes('text/html');
+}
+
+/**
  * A navigációs fallback előtöltése. Ez az egyetlen előre cache-elt bejegyzés —
  * minden más futásidőben, kérés alapján kerül be, így nem kell a build hashelt
  * fájlneveit ide injektálni.
@@ -47,7 +63,7 @@ async function dropOldCaches() {
 async function navigationStrategy(event) {
   try {
     const response = await fetch(event.request);
-    if (response.ok) {
+    if (response.ok && isHtmlResponse(response)) {
       event.waitUntil(putInCache(NAVIGATION_FALLBACK, response.clone()));
     }
     return response;
@@ -68,7 +84,7 @@ async function assetStrategy(event) {
     return cached;
   }
   const response = await fetch(event.request);
-  if (response.ok) {
+  if (response.ok && !isHtmlResponse(response)) {
     event.waitUntil(putInCache(event.request, response.clone()));
   }
   return response;
