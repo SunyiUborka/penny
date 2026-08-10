@@ -843,3 +843,69 @@ Ha implementálás közben ezek bármelyike csábítónak tűnik, ne tedd — mi
 - **Nem ad iOS-specifikus metaadatokat** (`apple-touch-icon`, `apple-mobile-web-app-capable`).
 - **Nem javítja az SPA fallback 404-es státuszkódját** (ha kiderül, hogy az). Ma is így működik, és a `response.ok` ellenőrzések miatt a service worker helyesen viselkedik mellette.
 - **Nem nyúl a `compose.yaml`-hoz, a backendhez és az adatmodellhez.**
+
+---
+
+## Végrehajtás után: mi maradt nyitva
+
+A négy task implementálva, review-zva és commitolva. Két dolgot viszont ez a
+környezet nem tudott ellenőrizni, mert **a hoston nincs böngésző telepítve, és
+nincs Android eszköz**, ezért ezek emberi ellenőrzésre várnak.
+
+### Valódi eszközön elvégzendő ellenőrzések
+
+1. **HTTPS-en** (`https://bill.p1ckle.xyz` — _ne_ a LAN/Tailscale IP-n, lásd
+   lentebb): Chrome Androidon felajánlja az „App telepítése" / „Hozzáadás a
+   főképernyőhöz" opciót, és zöld „F" ikonnal, „Fillér" néven telepszik.
+2. Főképernyőről indítva nincs címsáv és nincs eszköztár; a status bar színe
+   megegyezik a fejléccel. Az appon belüli témaváltó mindkét irányban azonnal
+   átszínezi a status bart. Nézd meg hideg indítással is, rendszerszintű sötét
+   témában.
+3. Desktop Chrome DevTools ugyanezen a HTTPS originon → Application:
+   a Manifest hibajelzés nélkül, mindhárom ikon betöltve, a maskable előnézet
+   nincs levágva; Service Workers „activated and is running", pontosan egy
+   regisztráció; Cache Storage-ban csak `filler-v1`, és **nincs benne `/api/`
+   bejegyzés**.
+4. **SSE regresszió:** ugyanaz az eseménylista nyitva két eszközön (az egyik a
+   telepített app) → az egyiken felvett kiadás a másikon oldalfrissítés nélkül
+   megjelenik, a kapcsolatjelző aktív marad.
+5. **Deploy frissesség:** egy jól látható frontend-változás után
+   `docker compose up --build -d`, majd a telepített app teljes bezárása és
+   újraindítása → az új verzió jön le. Közben a DevToolsban nézd meg, hogy nincs
+   `text/html` törzs a `filler-v1`-ben `/assets/*` kulcs alatt.
+6. Bejelentkezés, kiadás felvétele, szerkesztése és törlése a telepített appból.
+7. Repülő üzemmódban indítás → a héj betöltődik, a lista a szokásos
+   hibaállapotot mutatja, nincs összeomlás.
+
+### Ismert hiányosság a plain HTTP miatt
+
+A service worker és a telepíthetőség **biztonságos kontextust igényel**: HTTPS-t
+vagy `localhost`-ot. A README-ben dokumentált `http://192.168.x.x:8090` vagy
+Tailscale IP-s elérésnél a `navigator.serviceWorker` nem is létezik, tehát a
+regisztráció csendben kimarad, és a főképernyős ikon böngészősávval nyílik. Ez a
+README `## Telepítés Androidra` szakaszában dokumentálva van.
+
+### Javasolt következő lépések (nem része ennek a tervnek)
+
+- **`server.js` SPA fallback:** a hiányzó `/assets/*` fájlokra ma `200 text/html`
+  megy vissza `index.html` törzzsel, nem `404`. A service worker Content-Type
+  ellenőrzéssel védi ki, de a gyökérok a szerveren van — egy valódi 404 a
+  nem-HTML kérésekre a service workeren túl is tisztább (a böngésző ma
+  „MIME type text/html" hibát ír kiszolgálhatatlan modulra).
+- **`/assets/*` hosszú cache:** a spec 8. pontja azt állítja, ezek „hosszan
+  cache-elhetők", a valóságban viszont `public, max-age=0` megy rájuk (az
+  `@fastify/static` alapértelmezése). Biztonságos irányba téved, de a
+  `max-age=31536000, immutable` ugyanabban a `setHeaders` callbackben megvolna.
+- **Cache Storage növekedés:** a `CACHE = 'filler-v1'` konstans sosem változik,
+  így minden deploy hashelt assetjei felhalmozódnak, és az egyetlen ürítési mód a
+  konstans kézi emelése. Kis méretek mellett elhanyagolható, de érdemes egy
+  kommenttel jelezni.
+- **Login képernyő status bar:** a fejléc `v-if="showNav"` mögött van, tehát a
+  `/login`-on a status bar `--paper-raised` színű egy `--paper` hátterű lap
+  fölött. Apró, csak a login képernyőt érinti.
+- **Fejlesztői mód csapdája:** a `compose.dev.yaml` nem veszi le a
+  `8090:8080` portmappinget, így dev módban a 8090-en nem hallgat semmi — a
+  navigációs fallback miatt viszont ott a _legutóbb cache-elt produkciós héj_
+  jelenhet meg egy kapcsolódási hiba helyett.
+- **Ikon script:** van benne shebang, de a fájl módja `100644`, tehát
+  `./scripts/generate-icons.js` közvetlen futtatása permission errorral áll meg.
