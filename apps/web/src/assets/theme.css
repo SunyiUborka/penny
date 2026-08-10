@@ -225,8 +225,12 @@ button {
     background 0.15s ease;
 }
 
-.btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+/* Hover csak igazi kurzorral: érintésnél a koppintás után beragadna az
+   állapot, amíg máshova nem nyom a felhasználó. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
 }
 
 .btn:disabled {

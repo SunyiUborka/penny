@@ -265,8 +265,11 @@ async function handleDelete(expense) {
   cursor: pointer;
 }
 
-.expense-table__row:hover {
-  background: var(--forint-soft);
+/* Hover csak igazi kurzorral: érintésnél beragadna a kiemelés. */
+@media (hover: hover) and (pointer: fine) {
+  .expense-table__row:hover {
+    background: var(--forint-soft);
+  }
 }
 
 /* Más eszközön felvitt/szerkesztett kiadás: rövid bankjegy-zöld felvillanás,

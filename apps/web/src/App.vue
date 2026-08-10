@@ -95,9 +95,13 @@ async function handleLogout() {
   cursor: pointer;
 }
 
-.app-nav__menu-toggle:hover {
-  border-color: var(--brass);
-  color: var(--brass);
+/* Hover csak igazi kurzorral: érintésnél a koppintás után beragadna az
+   állapot, amíg máshova nem nyom a felhasználó. */
+@media (hover: hover) and (pointer: fine) {
+  .app-nav__menu-toggle:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+  }
 }
 
 .app-nav__tab {
@@ -112,8 +116,10 @@ async function handleLogout() {
   border-bottom: 2px solid transparent;
 }
 
-.app-nav__tab:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .app-nav__tab:hover {
+    color: var(--ink);
+  }
 }
 
 .app-nav__tab.router-link-exact-active {
@@ -132,9 +138,11 @@ async function handleLogout() {
   cursor: pointer;
 }
 
-.app-nav__theme-toggle:hover {
-  border-color: var(--brass);
-  color: var(--brass);
+@media (hover: hover) and (pointer: fine) {
+  .app-nav__theme-toggle:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+  }
 }
 
 .app-nav__logout {
@@ -151,9 +159,11 @@ async function handleLogout() {
   cursor: pointer;
 }
 
-.app-nav__logout:hover {
-  border-color: var(--stamp);
-  color: var(--stamp);
+@media (hover: hover) and (pointer: fine) {
+  .app-nav__logout:hover {
+    border-color: var(--stamp);
+    color: var(--stamp);
+  }
 }
 
 @media (max-width: 640px) {
