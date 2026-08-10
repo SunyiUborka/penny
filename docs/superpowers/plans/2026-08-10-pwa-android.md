@@ -682,9 +682,12 @@ erre:
 // frontendet szolgálna ki, mint egy elrontott service worker.
 await app.register(fastifyStatic, {
   root: path.join(import.meta.dirname, 'dist'),
+  // A telepített @fastify/static (10.x) a setHeaders callbacket a fastify
+  // Reply objektummal hívja meg (nem a nyers Node res-szel), ezért .header(),
+  // nem .setHeader() — lásd a csomag README-jét.
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
-      res.setHeader('Cache-Control', 'no-cache');
+      res.header('Cache-Control', 'no-cache');
     }
   },
 });
