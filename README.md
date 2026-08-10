@@ -78,6 +78,27 @@ Ez bind mountokkal indítja a szolgáltatásokat: a backend `node --watch`-csal,
 a frontend Vite dev szerverrel (`http://localhost:5173`, proxyzva a `/api`
 útvonalat a backend felé).
 
+## Telepítés Androidra
+
+Az app telepíthető PWA: Chrome-ban megnyitva a menüből („App telepítése" vagy
+„Hozzáadás a főképernyőhöz") kihelyezhető a főképernyőre, és onnan saját
+ikonnal, böngészősáv nélkül, teljes képernyőn indul. Nincs telepítőfájl és nem
+kell Play Store.
+
+Amit ez nem ad: offline működés nincs — a statikus héj gyorsítótárból
+betöltődik, de adatkapcsolat nélkül a lista üres marad.
+
+Az ikonokat a `scripts/generate-icons.js` állítja elő, dependency nélkül. A
+generált PNG-k committolva vannak, tehát a build nem futtatja a scriptet; ha az
+ikon színén vagy formáján változtatsz, futtasd újra:
+
+```sh
+node scripts/generate-icons.js
+```
+
+Fontos: az Android a telepítéskori ikont eltárolja, tehát egy ikoncsere csak
+újratelepítés után látszik a főképernyőn.
+
 ## Bejelentkezési jelszó beállítása
 
 Az app egyetlen, megosztott jelszóval működik, felhasználónév és regisztráció
