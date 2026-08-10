@@ -85,6 +85,13 @@ Az app telepíthető PWA: Chrome-ban megnyitva a menüből („App telepítése"
 ikonnal, böngészősáv nélkül, teljes képernyőn indul. Nincs telepítőfájl és nem
 kell Play Store.
 
+Ehhez biztonságos kontextus szükséges: TLS-szel (pl. a Caddy elé rakott
+`https://bill.p1ckle.xyz`) vagy `localhost`-on elérve működik. Plain HTTP-n,
+LAN IP-n (`http://192.168.x.x:8090`) vagy Tailscale IP-n keresztül a
+service worker nem regisztrálódik, a Chrome nem ajánlja fel a telepítést, és
+a „Hozzáadás a főképernyőhöz" csak egy sima böngészőikont hoz létre, ami
+böngészősávval nyílik meg.
+
 Amit ez nem ad: offline működés nincs — a statikus héj gyorsítótárból
 betöltődik, de adatkapcsolat nélkül a lista üres marad.
 
