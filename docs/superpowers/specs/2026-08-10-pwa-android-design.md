@@ -90,8 +90,8 @@ script a `scripts/` alatt). **A backend és az adatmodell érintetlen.**
 | `apps/web/public/icons/icon-512.png`          | új (generált) | nagy felbontású ikon, splash                              |
 | `apps/web/public/icons/icon-maskable-512.png` | új (generált) | Android adaptív ikon                                      |
 | `apps/web/public/sw.js`                       | új            | service worker                                            |
-| `scripts/generate-icons.mjs`                  | új            | az ikonokat előállító script                              |
-| `apps/web/index.html`                         | módosul       | manifest link, `theme-color` meta                         |
+| `scripts/generate-icons.js`                   | új            | az ikonokat előállító script                              |
+| `apps/web/index.html`                         | módosul       | manifest link, favicon, `theme-color` meta                |
 | `apps/web/src/main.js`                        | módosul       | service worker regisztráció                               |
 | `apps/web/src/utils/theme.js`                 | módosul       | a `theme-color` meta követi a témát                       |
 | `apps/web/server.js`                          | módosul       | `Cache-Control` a nem hashelt fájlokra                    |
@@ -179,8 +179,8 @@ képméret 80%-át kitevő középső kör) belül maradjon. A fenti geometriáv
 skálázva a grafika legtávolabbi pontja a középponttól ~26%-ra van, a
 megengedett 40%-hoz képest — tehát bármely launcher-forma esetén sértetlen.
 
-**Generálás:** `scripts/generate-icons.mjs`, futtatása `node
-scripts/generate-icons.mjs`. Nincs se új npm dependency, se rendszereszköz
+**Generálás:** `scripts/generate-icons.js`, futtatása `node
+scripts/generate-icons.js`. Nincs se új npm dependency, se rendszereszköz
 (a hoston nincs sem ImageMagick, sem librsvg, sem PIL): a script kézzel írja
 ki a PNG-t a Node beépített `node:zlib` moduljával (IHDR/IDAT/IEND chunkok
 CRC32-vel), és 4× felülminta-vételezéssel simítja az éleket. Az előállított
