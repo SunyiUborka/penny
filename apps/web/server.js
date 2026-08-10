@@ -42,7 +42,20 @@ await app.register(fastifyProxy, {
   },
 });
 
-await app.register(fastifyStatic, { root: path.join(import.meta.dirname, 'dist') });
+// A hashelt nevű assetek (/assets/*) hosszan cache-elhetők, a nem hashelt
+// fájlok viszont nem: különben a böngésző HTTP cache-e ugyanúgy beragadt
+// frontendet szolgálna ki, mint egy elrontott service worker.
+await app.register(fastifyStatic, {
+  root: path.join(import.meta.dirname, 'dist'),
+  // A telepített @fastify/static (10.x) a setHeaders callbacket a fastify
+  // Reply objektummal hívja meg (nem a nyers Node res-szel), ezért .header(),
+  // nem .setHeader() — lásd a csomag README-jét.
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+      res.header('Cache-Control', 'no-cache');
+    }
+  },
+});
 
 // SPA fallback: minden nem talált, nem proxyzott útvonal az index.html-t adja
 // vissza, hogy a vue-router history módja frissítésnél/közvetlen linkeknél
