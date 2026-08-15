@@ -310,12 +310,19 @@ export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform
 
 Majd `source ~/.bashrc`.
 
-- [ ] **Step 3: Telepítsd az alapcsomagokat és fogadd el a licenceket**
+- [ ] **Step 3: Fogadd el a licenceket, majd telepítsd az alapcsomagokat**
+
+A sorrend számít: elfogadatlan licencekkel a telepítés **némán** kihagyja a
+csomagot (0-s kilépési kóddal), tehát előbb a licencek:
 
 ```bash
-sdkmanager --install "platform-tools"
 yes | sdkmanager --licenses
+sdkmanager --install "platform-tools"
 ```
+
+A `sdkmanager` deprecation-figyelmeztetést ír ki (az utódja az `android sdk`),
+de működik. Ha egy csomag telepítése után hiányzik a könyvtára, ez a néma
+kihagyás történt — futtasd újra a licenc-elfogadást.
 
 - [ ] **Step 4: Ellenőrzés**
 
