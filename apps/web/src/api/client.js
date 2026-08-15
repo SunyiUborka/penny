@@ -1,6 +1,5 @@
 import { router } from '../router/index.js';
-
-const API_BASE = '/api';
+import { getApiBase } from './baseUrl.js';
 
 export class ApiError extends Error {
   /**
@@ -26,7 +25,7 @@ export class ApiError extends Error {
 async function request(method, path, options = {}) {
   const { body, schema } = options;
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     method,
     credentials: 'include',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
@@ -66,7 +65,7 @@ async function request(method, path, options = {}) {
  * @param {string} path
  */
 export function apiStreamUrl(path) {
-  return `${API_BASE}${path}`;
+  return `${getApiBase()}${path}`;
 }
 
 export const apiClient = {
