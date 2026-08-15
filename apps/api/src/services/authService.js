@@ -5,6 +5,8 @@ import {
   SESSION_MAX_AGE_SECONDS,
 } from '../config/auth.js';
 
+const BEARER_PREFIX = 'Bearer ';
+
 /**
  * Az induláskor egyszer kiszámolt argon2id hash a megosztott jelszóhoz. Az
  * .env-ben ember-olvashatóan tárolt jelszót itt hasheljük memóriában, hogy a
@@ -70,14 +72,31 @@ export function clearSessionCookie(reply, isSecureConnection) {
 }
 
 /**
+ * A natív app nem cookie-t, hanem `Authorization: Bearer` fejlécet küld: a
+ * WebView-ban a cross-origin cookie törékeny. A token ugyanaz az aláírt
+ * érték, amit a cookie hordoz, ezért ugyanaz az ellenőrzés érvényes rá.
  * @param {import('fastify').FastifyRequest} request
  * @returns {boolean}
  */
 export function isRequestAuthenticated(request) {
+  const header = request.headers.authorization;
+  if (header !== undefined && header.startsWith(BEARER_PREFIX)) {
+    return isSignedValueValid(request, header.slice(BEARER_PREFIX.length));
+  }
+
   const rawCookie = request.cookies[SESSION_COOKIE_NAME];
   if (!rawCookie) {
     return false;
   }
-  const unsigned = request.unsignCookie(rawCookie);
+  return isSignedValueValid(request, rawCookie);
+}
+
+/**
+ * @param {import('fastify').FastifyRequest} request
+ * @param {string} signedValue
+ * @returns {boolean}
+ */
+function isSignedValueValid(request, signedValue) {
+  const unsigned = request.unsignCookie(signedValue);
   return unsigned.valid && unsigned.value === SESSION_COOKIE_VALUE;
 }
