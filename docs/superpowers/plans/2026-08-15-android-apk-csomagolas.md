@@ -52,7 +52,8 @@
  */
 function normalize(value) {
   const trimmed = value.trim();
-  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+  // A felhasználó által beírt cím több záró perjelet is tartalmazhat.
+  return trimmed.replace(/\/+$/, '');
 }
 
 const DEFAULT_BASE = normalize(import.meta.env.VITE_API_BASE_URL ?? '/api');
