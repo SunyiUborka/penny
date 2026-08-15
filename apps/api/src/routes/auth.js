@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { LOGIN_RATE_LIMIT_MAX, LOGIN_RATE_LIMIT_WINDOW } from '../config/auth.js';
+import {
+  LOGIN_RATE_LIMIT_MAX,
+  LOGIN_RATE_LIMIT_WINDOW,
+  SESSION_COOKIE_VALUE,
+} from '../config/auth.js';
 import { UnauthorizedError } from '../errors.js';
 import {
   clearSessionCookie,
@@ -14,7 +18,11 @@ import {
 } from '../services/loginAttemptTracker.js';
 
 const loginBodySchema = z.object({ password: z.string().min(1) });
-const authStatusResponseSchema = z.object({ authenticated: z.boolean() });
+const authStatusResponseSchema = z.object({
+  authenticated: z.boolean(),
+  /** Csak a natív appnak (X-Client: app) megy vissza; a böngésző a cookie-t kapja. */
+  token: z.string().optional(),
+});
 
 /**
  * @param {number} ms
@@ -52,7 +60,13 @@ export default function authRoutes(fastify) {
 
       resetLoginAttempts(ip);
       setSessionCookie(reply, request.protocol === 'https');
-      return { authenticated: true };
+
+      // A böngésző szándékosan nem kapja meg a tokent: neki a httpOnly cookie
+      // jár, amit JS-ből nem lehet kiolvasni.
+      if (request.headers['x-client'] !== 'app') {
+        return { authenticated: true };
+      }
+      return { authenticated: true, token: request.signCookie(SESSION_COOKIE_VALUE) };
     },
   );
 
