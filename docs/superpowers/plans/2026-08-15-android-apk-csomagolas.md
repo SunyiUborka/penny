@@ -997,7 +997,20 @@ export function attachPullToRefresh(options) {
 
   /** @param {TouchEvent} event */
   const handleStart = (event) => {
-    if (refreshing || window.scrollY > 0 || event.touches.length !== 1) {
+    if (refreshing || window.scrollY > 0) {
+      // Frissítés közben vagy legfelülről elgörgetve egy új érintés nem
+      // indíthat lehúzást, de a látható jelzést sem szabad bántani: itt
+      // úgysem folyt lehúzás, amit vissza kellene állítani.
+      startY = null;
+      return;
+    }
+    if (event.touches.length !== 1) {
+      // Egy második ujj (csippentés) menet közben is idekerülhet: ha épp
+      // folyt egy lehúzás, a jelzést is vissza kell állítani, különben
+      // beragad a képernyőn.
+      if (startY !== null) {
+        onProgress(0);
+      }
       startY = null;
       return;
     }
@@ -1020,6 +1033,27 @@ export function attachPullToRefresh(options) {
     onProgress(Math.min(deltaY / TRIGGER_PX, 1));
   };
 
+  /**
+   * Lefuttatja a frissítést, majd a kimenetelétől (siker vagy hiba)
+   * függetlenül visszaállítja a gesztus állapotát.
+   *
+   * Külön függvény, `try`/`catch`/`finally`-vel: a `.catch().finally()` lánc
+   * elbukik a `promise/catch-or-return` szabályon (a `.finally()` nem számít
+   * lezárónak), és a config `noInlineConfig`-ja miatt inline kivétellel sem
+   * kerülhető meg.
+   */
+  const finishRefresh = async () => {
+    try {
+      await onRefresh();
+    } catch {
+      // A hívó dolga eldönteni, mit kezd a hibával; itt csak a gesztus
+      // állapotát kell visszaállítani.
+    } finally {
+      refreshing = false;
+      onProgress(0);
+    }
+  };
+
   /** @param {TouchEvent} event */
   const handleEnd = (event) => {
     if (startY === null) {
@@ -1033,15 +1067,7 @@ export function attachPullToRefresh(options) {
     }
     refreshing = true;
     onProgress(1);
-    onRefresh()
-      .catch(() => {
-        // A hívó dolga eldönteni, mit kezd a hibával; itt csak a gesztus
-        // állapotát kell visszaállítani.
-      })
-      .finally(() => {
-        refreshing = false;
-        onProgress(0);
-      });
+    finishRefresh();
   };
 
   window.addEventListener('touchstart', handleStart, { passive: true });
