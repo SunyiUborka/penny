@@ -719,25 +719,59 @@ A séma bővítése:
 const authStatusSchema = z.object({ authenticated: z.boolean(), token: z.string().optional() });
 ```
 
-A `login` action `try` ágában, a `this.checked = true;` sor elé:
+A `login` action `try` ágában, a `this.checked = true;` sor elé. **A token
+mentése saját `try`/`catch`-et kap:** ha a tárolás hibázik, az nem eshet bele a
+külső `catch`-be, mert az `describeLoginError`-on keresztül „Hibás jelszó."-t
+írna ki egy helyes jelszó után is:
 
 ```js
 if (isNativeApp() && result.token) {
-  await setToken(result.token);
+  try {
+    await setToken(result.token);
+  } catch (storageError) {
+    // A bejelentkezés a szerveren már megtörtént: egy tárolási hiba nem
+    // minősítheti át hibás jelszóvá. A következő indításnál újra kell majd
+    // jelentkezni, de ez a munkamenet érvényes.
+    console.error('A munkamenet-token mentése nem sikerült:', storageError);
+  }
 }
 ```
 
-A `logout` action:
+A `logout` action. **A helyi hitelesítő adat törlése `finally`-ben van:** ez
+kliensoldali művelet, nem függhet a szerver elérhetőségétől — enélkül egy
+offline kilépés érvényes tokent hagyna a telefonon:
 
 ```js
     async logout() {
-      await apiClient.post('/auth/logout');
-      if (isNativeApp()) {
-        await clearToken();
+      try {
+        await apiClient.post('/auth/logout');
+      } finally {
+        if (isNativeApp()) {
+          await clearToken();
+        }
+        this.authenticated = false;
+        this.checked = true;
       }
-      this.authenticated = false;
-      this.checked = true;
     },
+```
+
+Mivel a szerverhiba így továbbterjed a hívóhoz, a hívó oldalát is kezelni kell:
+a `apps/web/src/App.vue` `handleLogout` függvénye **mindig navigáljon** a
+bejelentkezőre, különben a helyi munkamenet törlődik, de a felhasználó a régi
+felületen marad, és a következő kattintás magyarázat nélkül dobja ki:
+
+```js
+async function handleLogout() {
+  try {
+    await authStore.logout();
+  } catch (error) {
+    // A helyi munkamenet ekkor is megszűnt; a szerveroldali kijelentkezés
+    // hibája nem tarthatja fogva a felhasználót ezen a képernyőn.
+    console.error('A szerveroldali kijelentkezés nem sikerült:', error);
+  } finally {
+    router.push({ name: 'login' });
+  }
+}
 ```
 
 - [ ] **Step 5: Ellenőrzés — a webes viselkedés változatlan**
