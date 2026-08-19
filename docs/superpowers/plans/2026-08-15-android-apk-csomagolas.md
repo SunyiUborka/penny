@@ -663,13 +663,14 @@ export async function initNativeRuntime() {
   if (!isNativeApp()) {
     return;
   }
-  const { value } = await Preferences.get({ key: SERVER_URL_KEY });
-  if (value) {
-    setApiBase(value);
-  }
   await loadToken();
 }
 ```
+
+> **Frissítve a végleges kódhoz képest:** a `SERVER_URL_KEY`/`setApiBase`
+> futásidejű felülírás terve végül nem valósult meg — a szerver címe
+> kizárólag fordítási időben, a `VITE_API_BASE_URL`-ből dől el (lásd Task 5
+> Step 2). Az `initNativeRuntime` egyetlen dolga a token betöltése.
 
 - [ ] **Step 3: Küldd a fejléceket a kliensben**
 
@@ -864,13 +865,30 @@ A modulszintű változók közé (a `visibilityHandler` mellé):
 
 ```js
 let appStateListener = null;
+// Minden subscribe()/unsubscribe() hívás új „generációt” nyit. A natív
+// CapacitorApp.addListener(...) hívás aszinkron (natív hídon megy át), ezért
+// mire a promise-a lefut, a feliratkozás már túlhaladott lehet (másik
+// eseményre navigáltunk, vagy közben leiratkoztunk). A .then()-ben ezt a
+// számlálót hasonlítjuk össze a feliratkozáskor elmentett értékkel: ha
+// eltér, a későn megérkezett listenert azonnal el kell távolítani, különben
+// örökre bent ragadna, és egy már elhagyott eseményhez próbálna frissíteni.
+// NE egyszerűsítsd ezt le egy sima null-ellenőrzésre — az nem különbözteti
+// meg „még nincs eredmény” és „már túlhaladott eredmény” eseteit.
+let subscriptionGeneration = 0;
 ```
 
 A `subscribe(eventId)` elejére, az `this.unsubscribe();` után:
 
 ```js
+// Új feliratkozás — új generáció, hogy egy korábbi (esetleg még
+// folyamatban lévő) natív addListener-promise fel tudja ismerni magát
+// elavultként, amikor később lefut. Lásd a subscriptionGeneration
+// kommentjét a modul tetején.
+subscriptionGeneration += 1;
+const generation = subscriptionGeneration;
+
 if (!liveUpdatesSupported()) {
-  this.subscribeNative(eventId);
+  this.subscribeNative(eventId, generation);
   return;
 }
 ```
@@ -883,8 +901,11 @@ if (!liveUpdatesSupported()) {
      * újratöltjük a listát. Ez pótolja a háttérben töltött idő alatt történt
      * változásokat.
      * @param {string} eventId
+     * @param {number} generation a feliratkozáskori subscriptionGeneration —
+     * ezzel ismeri fel a később lefutó promise, hogy időközben túlhaladottá
+     * vált-e (ld. a subscriptionGeneration kommentjét a modul tetején)
      */
-    subscribeNative(eventId) {
+    subscribeNative(eventId, generation) {
       streamEventId = eventId;
       CapacitorApp.addListener('appStateChange', ({ isActive }) => {
         if (isActive) {
@@ -892,6 +913,14 @@ if (!liveUpdatesSupported()) {
         }
       })
         .then((listener) => {
+          // A natív híd válasza aszinkron: mire megérkezik, lehet, hogy már
+          // egy újabb subscribe()/unsubscribe() futott le. Ilyenkor ez a
+          // listener egy már elhagyott eseményhez tartozna — azonnal el kell
+          // távolítani, nem szabad eltárolni.
+          if (generation !== subscriptionGeneration) {
+            listener.remove();
+            return listener;
+          }
           appStateListener = listener;
           return listener;
         })
@@ -902,7 +931,16 @@ if (!liveUpdatesSupported()) {
     },
 ```
 
-Az `unsubscribe(eventId)` action-ben, a `stream` lezárása után:
+Az `unsubscribe(eventId)` action-ben, a `stream` lezárása előtt:
+
+```js
+// Lezárjuk a jelenlegi generációt — így egy még folyamatban lévő natív
+// addListener-promise a lefutásakor elavultként ismeri fel magát (lásd
+// subscriptionGeneration a modul tetején), és eltávolítja saját magát.
+subscriptionGeneration += 1;
+```
+
+majd a `stream` lezárása után:
 
 ```js
 if (appStateListener) {
