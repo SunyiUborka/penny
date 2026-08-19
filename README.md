@@ -187,6 +187,14 @@ az `.env` `SESSION_SECRET` értékének cseréje — ez viszont egyszerre
 tokent, tehát mindenkinek újra be kell jelentkeznie, böngészőben és appban
 egyaránt.
 
+A tokent a `@capacitor/preferences` titkosítás nélkül, sima
+SharedPreferences-ben tárolja az eszközön. Mivel ez a token gyakorlatilag a
+megosztott jelszóval egyenértékű hitelesítő adat, és nincs szerveroldali
+lejárata, az app letiltja az Android-mentést
+(`android:allowBackup="false"` az `AndroidManifest.xml`-ben) — a token így
+nem kerülhet be a Google felhő-mentésbe vagy egy eszközcsere során átvitt
+adatok közé.
+
 ### Amit a natív app másképp csinál, mint a PWA
 
 - Nincs SSE: a kiadáslista akkor frissül, amikor az app előtérbe kerül,
