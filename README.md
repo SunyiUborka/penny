@@ -174,8 +174,8 @@ kötött. Új gépen (vagy CI-ban, ha valaha bevezetnétek) másold az
 **Fontos:** ha a kulcsfájl elvész, a következő APK-t nem lehet a régi
 telepítés fölé installálni — Android eltérő aláírás esetén elutasítja a
 frissítést. Az egyetlen kiút az app törlése és újratelepítése, ami az app
-minden helyi adatát törli (tárolt Bearer token, offline sorba tett
-kiadások). Ezért a kulcsfájlt (és a jelszavát) egy másik eszközön is mentsd.
+minden helyi adatát törli (a tárolt Bearer tokent). Ezért a kulcsfájlt (és a
+jelszavát) egy másik eszközön is mentsd.
 
 ### Hitelesítés és a token visszavonása
 
@@ -200,8 +200,17 @@ adatok közé.
 - Nincs SSE: a kiadáslista akkor frissül, amikor az app előtérbe kerül,
   vagy amikor a felhasználó lehúzza a listát (pull-to-refresh).
 - Natív megosztás (`@capacitor/share`) van bekötve az Elszámolás fülön.
-- Az ikonok ugyanabból a forrásból generálódnak, mint a PWA ikonjai
-  (`scripts/generate-icons.js`).
+- Az ikonokat nem a `scripts/generate-icons.js` állítja elő közvetlenül: a
+  `@capacitor/assets` generálja belőlük az Android ikon- és
+  splash-készletet, a `apps/mobile/assets/icon.png` (a PWA `icon-512.png`
+  másolata) és `icon-foreground.png` (a PWA `icon-maskable-512.png`
+  másolata) forrásokból. Az adaptív ikon bankjegyzöld háttere
+  (`#2F6B4F`) nincs külön `icon-background.png`-ként committolva — a
+  `@capacitor/assets` a `--iconBackgroundColor` kapcsolóval állítja elő.
+  Újragenerálás (pl. ha a PWA ikonja változik):
+  ```sh
+  npm run icons -w @filler/mobile
+  ```
 
 ### CI
 
