@@ -146,10 +146,14 @@ A `build:mobile` a `MOBILE_API_BASE_URL` környezeti változóból veszi a
 backend URL-jét (alapértelmezés: `https://bill.p1ckle.xyz/api`), és ezt
 `VITE_API_BASE_URL`-ként fordítja bele a webes kódba.
 
-**A szerver címe fordítási időben rögzül.** Az appon belül nincs
-szerver-cím mező — ez szándékos. Ha domaint váltasz, vagy LAN-címről akarod
-elérni a backendet, új APK-t kell fordítanod a megfelelő
-`MOBILE_API_BASE_URL` értékkel; a régi APK-ban a cím utólag nem írható át.
+**A szerver címe fordítási időben rögzül, és HTTPS végpontnak kell lennie.**
+Az appon belül nincs szerver-cím mező — ez szándékos. A `targetSdkVersion 36`
+letiltja a cleartext (plain HTTP) forgalmat, és a projekt szándékosan nem ad
+hozzá `usesCleartextTraffic` kivételt vagy hálózatbiztonsági konfigurációt —
+egy LAN IP-re vagy más plain HTTP címre mutató build minden kérésnél
+elhasalna, jól látható hibaüzenet nélkül. Ha domaint váltasz, új APK-t kell
+fordítanod a megfelelő, HTTPS-sel elérhető `MOBILE_API_BASE_URL` értékkel
+(pl. a Caddy elé rakott domain); a régi APK-ban a cím utólag nem írható át.
 
 Sikeres `release:mobile` után az aláírt APK itt jön létre:
 `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
