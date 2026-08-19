@@ -216,6 +216,10 @@ async function handleShare() {
   gap: var(--space-2);
 }
 
+.settlement__share {
+  margin-top: var(--space-4);
+}
+
 .settlement__coupon {
   display: flex;
   align-items: center;
