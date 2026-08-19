@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync": "cap sync android"
+    "sync": "cap sync android",
+    "icons": "mkdir -p assets && cp ../web/public/icons/icon-512.png assets/icon.png && cp ../web/public/icons/icon-maskable-512.png assets/icon-foreground.png && npx capacitor-assets generate --android --iconBackgroundColor '#2F6B4F'"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
