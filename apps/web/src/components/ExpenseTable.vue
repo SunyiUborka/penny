@@ -5,6 +5,7 @@ import { useExpensesStore } from '../stores/expenses.js';
 import ExpenseModal from './ExpenseModal.vue';
 import { formatDate } from '../utils/format.js';
 import { liveUpdatesSupported } from '../utils/platform.js';
+import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -19,18 +20,34 @@ const showModal = ref(false);
 const editingExpense = ref(null);
 const saving = ref(false);
 const formError = ref('');
+const pullRatio = ref(0);
+let detachPullToRefresh = null;
 
 onMounted(() => {
   // Feliratkozás ELŐBB, mint a lista betöltése: így a két művelet közben
   // felvitt kiadás sem maradhat le.
   expensesStore.subscribe(props.event.id);
   expensesStore.fetchExpenses(props.event.id);
+
+  if (!showLiveIndicator) {
+    detachPullToRefresh = attachPullToRefresh({
+      onRefresh: () => expensesStore.refreshQuietly(props.event.id),
+      onProgress: (ratio) => {
+        pullRatio.value = ratio;
+      },
+    });
+  }
 });
 
 // A fülváltás (v-if) lebontja ezt a komponenst, tehát az Elszámolás fülön nem
 // marad nyitva a kapcsolat.
 onUnmounted(() => {
   expensesStore.unsubscribe(props.event.id);
+
+  if (detachPullToRefresh) {
+    detachPullToRefresh();
+    detachPullToRefresh = null;
+  }
 });
 
 const filteredExpenses = computed(() => {
@@ -84,6 +101,9 @@ async function handleDelete(expense) {
 
 <template>
   <div class="expense-table">
+    <p v-if="pullRatio > 0" class="expense-table__pull" :style="{ opacity: pullRatio }">
+      {{ pullRatio >= 1 ? 'Frissítés…' : 'Húzd lejjebb a frissítéshez' }}
+    </p>
     <div class="expense-table__toolbar">
       <div class="field expense-table__filter">
         <label for="payer-filter">Szűrés fizetőre</label>
@@ -414,5 +434,12 @@ async function handleDelete(expense) {
     animation: none;
     background-color: var(--forint-soft);
   }
+}
+
+.expense-table__pull {
+  margin: 0 0 var(--space-2);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }
 </style>
