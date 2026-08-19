@@ -3,27 +3,16 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import { router } from './router/index.js';
 import { initTheme } from './utils/theme.js';
-import { initNativeRuntime } from './native/runtime.js';
 import { isNativeApp } from './utils/platform.js';
 import './assets/theme.css';
 
-/**
- * A mount előtt meg kell várni a natív runtime-ot: a router guard rögtön
- * hitelesítést kérdez a szervertől, ehhez pedig már a helyes bázis-URL kell.
- */
-async function bootstrap() {
-  initTheme();
-  await initNativeRuntime();
+initTheme();
 
-  const app = createApp(App);
-  app.use(createPinia());
-  app.use(router);
-  app.mount('#app');
-}
+const app = createApp(App);
 
-bootstrap().catch((error) => {
-  console.error('Az app indítása nem sikerült:', error);
-});
+app.use(createPinia());
+app.use(router);
+app.mount('#app');
 
 // Service worker csak a böngészős produkciós buildben: fejlesztői módban a
 // Vite HMR-jével akadna össze, a natív appban pedig felesleges — ott a
