@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { Share } from '@capacitor/share';
 import { formatMoney, SETTLEMENT_CURRENCY, settlementResponseSchema } from '@filler/shared';
 import { apiClient } from '../api/client.js';
+import { isNativeApp } from '../utils/platform.js';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -11,6 +13,8 @@ const props = defineProps({
 const settlement = ref(null);
 const loading = ref(true);
 const loadError = ref(false);
+const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
+const shareError = ref('');
 
 async function load() {
   loading.value = true;
@@ -49,6 +53,33 @@ function balanceStatus(balanceMinor) {
 const hasNothingToSettle = computed(() => {
   return settlement.value !== null && settlement.value.transfers.length === 0;
 });
+
+/**
+ * A megosztható összefoglaló: ki kinek mennyit fizet. Egyszerű szöveg, hogy
+ * bármelyik célalkalmazásban olvasható maradjon.
+ * @returns {string}
+ */
+function buildShareText() {
+  const lines = settlement.value.transfers.map((transfer) => {
+    return `${participantName(transfer.fromId)} → ${participantName(transfer.toId)}: ${money(transfer.amountMinor)}`;
+  });
+  return [`${props.event.name} — elszámolás`, '', ...lines].join('\n');
+}
+
+async function handleShare() {
+  shareError.value = '';
+  try {
+    await Share.share({
+      title: `${props.event.name} — elszámolás`,
+      text: buildShareText(),
+      dialogTitle: 'Elszámolás megosztása',
+    });
+  } catch {
+    // A megosztó lap bezárása is hibaként jön vissza; ezt nem jelezzük
+    // hibaüzenettel, csak a tényleges küldési hibát.
+    shareError.value = '';
+  }
+}
 </script>
 
 <template>
@@ -121,6 +152,15 @@ const hasNothingToSettle = computed(() => {
             </span>
           </li>
         </ul>
+        <button
+          v-if="shareSupported && !hasNothingToSettle"
+          type="button"
+          class="btn settlement__share"
+          @click="handleShare"
+        >
+          Megosztás
+        </button>
+        <p v-if="shareError" role="alert" class="settlement__status">{{ shareError }}</p>
       </template>
     </template>
   </div>
