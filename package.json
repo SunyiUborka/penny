@@ -15,6 +15,7 @@
     "format": "git ls-files -zco --exclude-standard | xargs -0r prettier --ignore-unknown --write",
     "format:check": "git ls-files -zco --exclude-standard | xargs -0r prettier --ignore-unknown --check",
     "build": "npm run build --workspaces --if-present",
+    "build:mobile": "VITE_API_BASE_URL=${MOBILE_API_BASE_URL:-https://bill.p1ckle.xyz/api} npm run build -w @filler/web && npm run sync -w @filler/mobile",
     "dev": "docker compose -f compose.yaml -f compose.dev.yaml up --build"
   },
   "devDependencies": {

@@ -1,0 +1,10 @@
+{
+  "appId": "xyz.p1ckle.filler",
+  "appName": "Fillér",
+  "webDir": "../web/dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
