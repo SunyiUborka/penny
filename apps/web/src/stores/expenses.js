@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia';
+import { App as CapacitorApp } from '@capacitor/app';
 import {
   expenseListResponseSchema,
   expenseResponseSchema,
   expenseStreamMessageSchema,
 } from '@filler/shared';
 import { apiClient, apiStreamUrl } from '../api/client.js';
+import { liveUpdatesSupported } from '../utils/platform.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -14,6 +16,7 @@ const FRESH_MS = 1600;
 let stream = null;
 let streamEventId = null;
 let visibilityHandler = null;
+let appStateListener = null;
 const freshTimers = new Map();
 
 /**
@@ -92,6 +95,11 @@ export const useExpensesStore = defineStore('expenses', {
     subscribe(eventId) {
       this.unsubscribe();
 
+      if (!liveUpdatesSupported()) {
+        this.subscribeNative(eventId);
+        return;
+      }
+
       let opened = false;
       stream = new EventSource(apiStreamUrl(`/events/${eventId}/stream`));
       streamEventId = eventId;
@@ -123,6 +131,29 @@ export const useExpensesStore = defineStore('expenses', {
     },
 
     /**
+     * A natív app „élő frissítése”: stream helyett minden előtérbe kerüléskor
+     * újratöltjük a listát. Ez pótolja a háttérben töltött idő alatt történt
+     * változásokat.
+     * @param {string} eventId
+     */
+    subscribeNative(eventId) {
+      streamEventId = eventId;
+      CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          this.refreshQuietly(eventId);
+        }
+      })
+        .then((listener) => {
+          appStateListener = listener;
+          return listener;
+        })
+        .catch(() => {
+          // Ha a listener regisztrációja elbukik, marad a kézi újratöltés —
+          // ez nem indokolja a lista elrontását egy hibaüzenettel.
+        });
+    },
+
+    /**
      * @param {string} [eventId] ha meg van adva, csak akkor zár, ha valóban
      * ehhez az eseményhez tartozik a nyitott stream — így egy későn lefutó
      * onUnmounted nem tudja lezárni a közben már megnyílt új streamet
@@ -134,6 +165,10 @@ export const useExpensesStore = defineStore('expenses', {
       if (stream) {
         stream.close();
         stream = null;
+      }
+      if (appStateListener) {
+        appStateListener.remove();
+        appStateListener = null;
       }
       streamEventId = null;
       if (visibilityHandler) {

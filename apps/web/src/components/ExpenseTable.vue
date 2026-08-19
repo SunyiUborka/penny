@@ -4,6 +4,7 @@ import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import ExpenseModal from './ExpenseModal.vue';
 import { formatDate } from '../utils/format.js';
+import { liveUpdatesSupported } from '../utils/platform.js';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 
 const expensesStore = useExpensesStore();
+const showLiveIndicator = liveUpdatesSupported();
 
 const payerFilter = ref('');
 const showModal = ref(false);
@@ -93,6 +95,7 @@ async function handleDelete(expense) {
         </select>
       </div>
       <p
+        v-if="showLiveIndicator"
         class="expense-table__live"
         :class="{ 'is-offline': !expensesStore.connected }"
         :title="
