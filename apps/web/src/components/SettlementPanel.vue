@@ -14,7 +14,6 @@ const settlement = ref(null);
 const loading = ref(true);
 const loadError = ref(false);
 const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
-const shareError = ref('');
 
 async function load() {
   loading.value = true;
@@ -67,7 +66,6 @@ function buildShareText() {
 }
 
 async function handleShare() {
-  shareError.value = '';
   try {
     await Share.share({
       title: `${props.event.name} — elszámolás`,
@@ -75,9 +73,10 @@ async function handleShare() {
       dialogTitle: 'Elszámolás megosztása',
     });
   } catch {
-    // A megosztó lap bezárása is hibaként jön vissza; ezt nem jelezzük
-    // hibaüzenettel, csak a tényleges küldési hibát.
-    shareError.value = '';
+    // Androidon a megosztó lap bezárása is hibaként jön vissza, és a plugin
+    // nem ad megbízható hibakódot, amivel ezt egy valódi küldési hibától meg
+    // lehetne különböztetni — ezért itt szándékosan nem jelzünk semmit: egy
+    // hibaüzenet minden egyszerű bezáráskor téves riasztás lenne.
   }
 }
 </script>
@@ -153,14 +152,13 @@ async function handleShare() {
           </li>
         </ul>
         <button
-          v-if="shareSupported && !hasNothingToSettle"
+          v-if="shareSupported"
           type="button"
           class="btn settlement__share"
           @click="handleShare"
         >
           Megosztás
         </button>
-        <p v-if="shareError" role="alert" class="settlement__status">{{ shareError }}</p>
       </template>
     </template>
   </div>
