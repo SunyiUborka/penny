@@ -1,6 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { usePeopleStore } from '../stores/people.js';
+import { getApiBase } from '../api/baseUrl.js';
+import { saveServerUrl } from '../native/runtime.js';
+import { isNativeApp } from '../utils/platform.js';
 
 const peopleStore = usePeopleStore();
 
@@ -11,6 +14,23 @@ const creating = ref(false);
 const editingId = ref(null);
 const editingName = ref('');
 const rowError = ref({});
+
+const nativeApp = isNativeApp();
+const serverUrl = ref(getApiBase());
+const serverUrlSaved = ref(false);
+const serverUrlError = ref('');
+
+async function handleSaveServerUrl() {
+  serverUrlSaved.value = false;
+  serverUrlError.value = '';
+  try {
+    await saveServerUrl(serverUrl.value);
+    serverUrl.value = getApiBase();
+    serverUrlSaved.value = true;
+  } catch {
+    serverUrlError.value = 'Nem sikerült elmenteni a szerver címét.';
+  }
+}
 
 onMounted(() => {
   peopleStore.fetchPeople();
@@ -126,6 +146,21 @@ async function handleDelete(person) {
           </p>
         </li>
       </ul>
+    </section>
+
+    <section v-if="nativeApp" class="settings__section">
+      <h2>Szerver</h2>
+      <p class="settings__hint">
+        Az app ezt a címet hívja. Csak akkor írd át, ha a szerver máshova költözött, vagy helyi
+        hálózaton szeretnéd elérni.
+      </p>
+      <div class="field">
+        <label for="server-url">Szerver címe</label>
+        <input id="server-url" v-model="serverUrl" type="url" inputmode="url" autocomplete="off" />
+      </div>
+      <button type="button" class="btn btn--primary" @click="handleSaveServerUrl">Mentés</button>
+      <p v-if="serverUrlSaved" class="settings__hint">Elmentve. A cím azonnal érvényes.</p>
+      <p v-if="serverUrlError" role="alert" class="field-error">{{ serverUrlError }}</p>
     </section>
   </main>
 </template>
