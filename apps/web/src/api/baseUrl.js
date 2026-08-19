@@ -2,8 +2,8 @@
  * Az API bázisútvonala. A webes buildben relatív (`/api`), mert a frontendet
  * ugyanaz a szerver szolgálja ki, ami a `/api`-t proxyzza. A natív appban
  * abszolút URL kell, mert ott a WebView a helyi assetekről tölt be — ezt a
- * `VITE_API_BASE_URL` adja fordítási időben, és a felhasználó futásidőben
- * felül tudja írni (lásd Task 5).
+ * `VITE_API_BASE_URL` adja meg fordítási időben. Az érték fordítási időben
+ * rögzített: ha a szerver máshova költözik, az APK-t újra kell fordítani.
  */
 
 /**
@@ -12,27 +12,13 @@
  */
 function normalize(value) {
   const trimmed = value.trim();
-  // A felhasználó által beírt cím több záró perjelet is tartalmazhat.
+  // A build-időben megadott cím több záró perjelet is tartalmazhat.
   return trimmed.replace(/\/+$/, '');
 }
 
-const DEFAULT_BASE = normalize(import.meta.env.VITE_API_BASE_URL ?? '/api');
-
-let currentBase = DEFAULT_BASE;
-
-/** @returns {string} */
-export function getDefaultApiBase() {
-  return DEFAULT_BASE;
-}
+const API_BASE = normalize(import.meta.env.VITE_API_BASE_URL ?? '/api');
 
 /** @returns {string} */
 export function getApiBase() {
-  return currentBase;
-}
-
-/**
- * @param {string} value
- */
-export function setApiBase(value) {
-  currentBase = normalize(value);
+  return API_BASE;
 }
