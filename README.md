@@ -106,6 +106,98 @@ node scripts/generate-icons.js
 Fontos: az Android a telepítéskori ikont eltárolja, tehát egy ikoncsere csak
 újratelepítés után látszik a főképernyőn.
 
+## Android APK
+
+A PWA (lásd fentebb) mellett natív Android APK is készíthető a
+[Capacitor](https://capacitorjs.com/) segítségével (`apps/mobile`). A kettő
+egymás mellett létezik, nem egymást helyettesítik: az APK-nak natív share és
+Bearer token alapú hitelesítés jár, cserébe nincs benne SSE (lásd lentebb).
+
+### Fejlesztői környezet
+
+A build géphez Android SDK és egy teljes JDK (nem csak JRE) kell:
+
+1. Töltsd le az Android parancssori eszközöket
+   (`commandlinetools-linux-*.zip`, https://developer.android.com/studio#command-line-tools-only),
+   csomagold ki `~/Android/Sdk/cmdline-tools/latest`-be.
+2. Vedd fel a `~/.bashrc`-be:
+   ```sh
+   export ANDROID_HOME="$HOME/Android/Sdk"
+   export PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools"
+   ```
+3. Fogadd el a licenceket, és telepítsd a szükséges csomagokat:
+   ```sh
+   yes | sdkmanager --licenses
+   sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+   ```
+4. Gradle-hez valódi JDK kell (`javac`), nem elég a JRE — ellenőrizd
+   `which javac`-cal. Ha hiányzik, telepítsd a `java-21-openjdk-devel`
+   csomagot, vagy állíts be egy portable JDK-t (pl. Temurin 21) `JAVA_HOME`-nak
+   és tedd a `bin`-jét a `PATH` elejére a gradle-parancsok előtt.
+
+### Build és release
+
+```sh
+npm run build:mobile    # web build + capacitor sync
+npm run release:mobile  # fentiek + aláírt release APK
+```
+
+A `build:mobile` a `MOBILE_API_BASE_URL` környezeti változóból veszi a
+backend URL-jét (alapértelmezés: `https://bill.p1ckle.xyz/api`), és ezt
+`VITE_API_BASE_URL`-ként fordítja bele a webes kódba.
+
+**A szerver címe fordítási időben rögzül.** Az appon belül nincs
+szerver-cím mező — ez szándékos. Ha domaint váltasz, vagy LAN-címről akarod
+elérni a backendet, új APK-t kell fordítanod a megfelelő
+`MOBILE_API_BASE_URL` értékkel; a régi APK-ban a cím utólag nem írható át.
+
+Sikeres `release:mobile` után az aláírt APK itt jön létre:
+`apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
+
+Minden kiadás előtt kézzel emeld a `versionCode` értékét az
+`apps/mobile/android/app/build.gradle`-ben (a `versionName` opcionális, de
+érdemes követni) — a Play Store-on kívüli, kézi telepítésnél is ez dönti el,
+hogy egy új APK „frissítésnek" számít-e a régi fölött.
+
+### Aláíró kulcs
+
+A release build aláírt APK-t készít; a kulcs helye és jelszava az
+`apps/mobile/keystore.properties`-ben van, ami gitignore-olt, tehát géphez
+kötött. Új gépen (vagy CI-ban, ha valaha bevezetnétek) másold az
+`apps/mobile/keystore.properties.example` fájlt `keystore.properties` néven,
+és töltsd ki a valódi `storeFile`/`storePassword`/`keyPassword` értékekkel.
+
+**Fontos:** ha a kulcsfájl elvész, a következő APK-t nem lehet a régi
+telepítés fölé installálni — Android eltérő aláírás esetén elutasítja a
+frissítést. Az egyetlen kiút az app törlése és újratelepítése, ami az app
+minden helyi adatát törli (tárolt Bearer token, offline sorba tett
+kiadások). Ezért a kulcsfájlt (és a jelszavát) egy másik eszközön is mentsd.
+
+### Hitelesítés és a token visszavonása
+
+A natív app böngésző-session cookie helyett egy `Authorization: Bearer`
+tokent tárol (`@capacitor/preferences`), amit bejelentkezéskor kap. Ennek a
+tokennek **nincs szerveroldali lejárata**. Egyetlen módja a visszavonásnak
+az `.env` `SESSION_SECRET` értékének cseréje — ez viszont egyszerre
+érvényteleníti az összes böngészős sessiont **és** az összes appban tárolt
+tokent, tehát mindenkinek újra be kell jelentkeznie, böngészőben és appban
+egyaránt.
+
+### Amit a natív app másképp csinál, mint a PWA
+
+- Nincs SSE: a kiadáslista akkor frissül, amikor az app előtérbe kerül,
+  vagy amikor a felhasználó lehúzza a listát (pull-to-refresh).
+- Natív megosztás (`@capacitor/share`) van bekötve az Elszámolás fülön.
+- Az ikonok ugyanabból a forrásból generálódnak, mint a PWA ikonjai
+  (`scripts/generate-icons.js`).
+
+### CI
+
+Az APK-build szándékosan **nincs** benne a CI-ban — ehhez az aláíró kulcsot
+titokként kellene feltölteni egy megosztott futtatókörnyezetbe, ami egy
+önhosztolt, kis léptékű projektnél nagyobb kockázat, mint amennyit megér.
+A release APK-t egyelőre kézzel, fejlesztői gépen kell előállítani.
+
 ## Bejelentkezési jelszó beállítása
 
 Az app egyetlen, megosztott jelszóval működik, felhasználónév és regisztráció
