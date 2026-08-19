@@ -17,6 +17,16 @@ let stream = null;
 let streamEventId = null;
 let visibilityHandler = null;
 let appStateListener = null;
+// Minden subscribe()/unsubscribe() hívás új „generációt” nyit. A natív
+// CapacitorApp.addListener(...) hívás aszinkron (natív hídon megy át), ezért
+// mire a promise-a lefut, a feliratkozás már túlhaladott lehet (másik
+// eseményre navigáltunk, vagy közben leiratkoztunk). A .then()-ben ezt a
+// számlálót hasonlítjuk össze a feliratkozáskor elmentett értékkel: ha
+// eltér, a későn megérkezett listenert azonnal el kell távolítani, különben
+// örökre bent ragadna, és egy már elhagyott eseményhez próbálna frissíteni.
+// NE egyszerűsítsd ezt le egy sima null-ellenőrzésre — az nem különbözteti
+// meg „még nincs eredmény” és „már túlhaladott eredmény” eseteit.
+let subscriptionGeneration = 0;
 const freshTimers = new Map();
 
 /**
@@ -95,8 +105,15 @@ export const useExpensesStore = defineStore('expenses', {
     subscribe(eventId) {
       this.unsubscribe();
 
+      // Új feliratkozás — új generáció, hogy egy korábbi (esetleg még
+      // folyamatban lévő) natív addListener-promise fel tudja ismerni magát
+      // elavultként, amikor később lefut. Lásd a subscriptionGeneration
+      // kommentjét a modul tetején.
+      subscriptionGeneration += 1;
+      const generation = subscriptionGeneration;
+
       if (!liveUpdatesSupported()) {
-        this.subscribeNative(eventId);
+        this.subscribeNative(eventId, generation);
         return;
       }
 
@@ -135,8 +152,11 @@ export const useExpensesStore = defineStore('expenses', {
      * újratöltjük a listát. Ez pótolja a háttérben töltött idő alatt történt
      * változásokat.
      * @param {string} eventId
+     * @param {number} generation a feliratkozáskori subscriptionGeneration —
+     * ezzel ismeri fel a később lefutó promise, hogy időközben túlhaladottá
+     * vált-e (ld. a subscriptionGeneration kommentjét a modul tetején)
      */
-    subscribeNative(eventId) {
+    subscribeNative(eventId, generation) {
       streamEventId = eventId;
       CapacitorApp.addListener('appStateChange', ({ isActive }) => {
         if (isActive) {
@@ -144,6 +164,14 @@ export const useExpensesStore = defineStore('expenses', {
         }
       })
         .then((listener) => {
+          // A natív híd válasza aszinkron: mire megérkezik, lehet, hogy már
+          // egy újabb subscribe()/unsubscribe() futott le. Ilyenkor ez a
+          // listener egy már elhagyott eseményhez tartozna — azonnal el kell
+          // távolítani, nem szabad eltárolni.
+          if (generation !== subscriptionGeneration) {
+            listener.remove();
+            return listener;
+          }
           appStateListener = listener;
           return listener;
         })
@@ -162,6 +190,10 @@ export const useExpensesStore = defineStore('expenses', {
       if (eventId !== undefined && streamEventId !== eventId) {
         return;
       }
+      // Lezárjuk a jelenlegi generációt — így egy még folyamatban lévő natív
+      // addListener-promise a lefutásakor elavultként ismeri fel magát (lásd
+      // subscriptionGeneration a modul tetején), és eltávolítja saját magát.
+      subscriptionGeneration += 1;
       if (stream) {
         stream.close();
         stream = null;
