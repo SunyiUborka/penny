@@ -10,6 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.0",
     "@fastify/http-proxy": "^11.1.0",
     "@fastify/static": "^10.1.2",
     "@filler/shared": "*",

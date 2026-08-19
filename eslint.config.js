@@ -39,7 +39,13 @@ const baseRules = {
 
 export default [
   {
-    ignores: ['**/node_modules/**', '**/dist/**', 'apps/web/dist/**', 'mongo-data/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'apps/web/dist/**',
+      'apps/mobile/android/**',
+      'mongo-data/**',
+    ],
   },
   js.configs.recommended,
   {

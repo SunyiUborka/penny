@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fillér</string>
+    <string name="title_activity_main">Fillér</string>
+    <string name="package_name">xyz.p1ckle.filler</string>
+    <string name="custom_url_scheme">xyz.p1ckle.filler</string>
+</resources>
