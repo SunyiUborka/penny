@@ -286,7 +286,18 @@ git commit -m "feat(api): Bearer token hitelesítés a natív app számára"
 - Consumes: semmit.
 - Produces: működő `sdkmanager` és `adb`, `ANDROID_HOME=$HOME/Android/Sdk` a shell környezetben. A konkrét platform- és build-tools verzió telepítése a Task 4-ben történik, amikor a Capacitor megmondja, melyik kell.
 
-**Háttér:** a gépen JDK 21 van (`openjdk 21.0.11`), Android SDK nincs. Android Studio nem kell, a `commandlinetools` csomag elég.
+**Háttér:** Android SDK nincs a gépen. Android Studio nem kell, a
+`commandlinetools` csomag elég.
+
+**JDK, ne csak JRE:** a `java -version` önmagában megtévesztő — a gépen a
+`java-21-openjdk` (+ headless) volt fent, ami futtatókörnyezet: `javac` nélkül
+a Gradle build elbukik. Telepítsd a fejlesztői csomagot:
+
+```bash
+sudo dnf install java-21-openjdk-devel
+```
+
+Az ellenőrzés ezért a `javac -version`, nem a `java -version`.
 
 - [ ] **Step 1: Töltsd le és pakold ki a command line toolsot**
 
@@ -330,10 +341,12 @@ kihagyás történt — futtasd újra a licenc-elfogadást.
 echo $ANDROID_HOME
 sdkmanager --version
 adb version
-java -version
+javac -version
 ```
 
-Elvárt: az `ANDROID_HOME` a `~/Android/Sdk`-ra mutat, mindhárom parancs verziót ír ki hiba nélkül.
+Elvárt: az `ANDROID_HOME` a `~/Android/Sdk`-ra mutat, és mindhárom parancs
+verziót ír ki hiba nélkül. A `javac` külön fontos: ha ez hiányzik, csak JRE van
+fent, és a Task 4 Gradle buildje elbukik.
 
 - [ ] **Step 5: Nincs commit**
 
