@@ -21,12 +21,21 @@ export function attachPullToRefresh(options) {
 
   /** @param {TouchEvent} event */
   const handleStart = (event) => {
-    if (refreshing || window.scrollY > 0 || event.touches.length !== 1) {
+    if (refreshing || window.scrollY > 0) {
+      // Frissítés közben vagy legfelülről elgörgetve egy új érintés nem
+      // indíthat lehúzást, de a látható jelzést sem szabad bántani: itt
+      // úgysem folyt lehúzás, amit vissza kellene állítani.
+      startY = null;
+      return;
+    }
+    if (event.touches.length !== 1) {
       // Egy második ujj (csippentés) menet közben is idekerülhet: ha épp
       // folyt egy lehúzás, a jelzést is vissza kell állítani, különben
       // beragad a képernyőn.
+      if (startY !== null) {
+        onProgress(0);
+      }
       startY = null;
-      onProgress(0);
       return;
     }
     startY = event.touches[0].clientY;
