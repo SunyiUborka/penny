@@ -89,13 +89,26 @@ export function attachPullToRefresh(options) {
     finishRefresh();
   };
 
+  /**
+   * Android rutinszerűen megszakítja az érintéssorozatot (értesítési sáv,
+   * rendszer vissza-/él-gesztus, bejövő hívás): ilyenkor a `touchend` sosem
+   * fut le, a `handleEnd` sem tudja visszaállítani a jelzést, ami így a
+   * "Húzd lejjebb a frissítéshez" felirattal a képernyőn ragadna.
+   */
+  const handleCancel = () => {
+    startY = null;
+    onProgress(0);
+  };
+
   window.addEventListener('touchstart', handleStart, { passive: true });
   window.addEventListener('touchmove', handleMove, { passive: true });
   window.addEventListener('touchend', handleEnd, { passive: true });
+  window.addEventListener('touchcancel', handleCancel, { passive: true });
 
   return () => {
     window.removeEventListener('touchstart', handleStart);
     window.removeEventListener('touchmove', handleMove);
     window.removeEventListener('touchend', handleEnd);
+    window.removeEventListener('touchcancel', handleCancel);
   };
 }
