@@ -1,5 +1,7 @@
 import { router } from '../router/index.js';
 import { getApiBase } from './baseUrl.js';
+import { getToken } from '../native/token.js';
+import { isNativeApp } from '../utils/platform.js';
 
 export class ApiError extends Error {
   /**
@@ -25,10 +27,23 @@ export class ApiError extends Error {
 async function request(method, path, options = {}) {
   const { body, schema } = options;
 
+  const headers = {};
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (isNativeApp()) {
+    // A szerver ebből tudja, hogy a login válaszába tokent is tegyen.
+    headers['X-Client'] = 'app';
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
   const response = await fetch(`${getApiBase()}${path}`, {
     method,
     credentials: 'include',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

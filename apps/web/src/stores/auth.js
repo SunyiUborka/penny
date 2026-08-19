@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia';
 import { z } from 'zod';
 import { apiClient, ApiError } from '../api/client.js';
+import { clearToken, setToken } from '../native/token.js';
+import { isNativeApp } from '../utils/platform.js';
 
-const authStatusSchema = z.object({ authenticated: z.boolean() });
+const authStatusSchema = z.object({ authenticated: z.boolean(), token: z.string().optional() });
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -38,6 +40,9 @@ export const useAuthStore = defineStore('auth', {
           { schema: authStatusSchema },
         );
         this.authenticated = result.authenticated;
+        if (isNativeApp() && result.token) {
+          await setToken(result.token);
+        }
         this.checked = true;
         return true;
       } catch (error) {
@@ -52,6 +57,9 @@ export const useAuthStore = defineStore('auth', {
 
     async logout() {
       await apiClient.post('/auth/logout');
+      if (isNativeApp()) {
+        await clearToken();
+      }
       this.authenticated = false;
       this.checked = true;
     },
