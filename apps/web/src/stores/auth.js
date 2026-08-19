@@ -39,8 +39,27 @@ export const useAuthStore = defineStore('auth', {
           { password },
           { schema: authStatusSchema },
         );
+
+        if (isNativeApp() && !result.token) {
+          // Natív appban tokent kell kapnunk: cookie-t a WebView nem tud a
+          // hídon átküldött kérésekhez felhasználni, tehát token nélkül
+          // nincs mivel hitelesíteni a további kéréseket. Ha ilyenkor
+          // mégis "authenticated: true"-t hinnénk, a store hitelesítettnek
+          // látszana hitelesítő adat nélkül: minden kérés 401-et kapna,
+          // ami a login route-ra dobna, a router guard pedig onnan azonnal
+          // visszadobna, mert authenticated === true — végtelen hurok
+          // (lásd a review 1. pontját). Ez akkor fordulhat elő, ha a
+          // szerver a 721e2c4 előtti verzión fut, vagy egy proxy elnyeli az
+          // X-Client fejlécet.
+          this.authenticated = false;
+          this.checked = true;
+          this.loginError =
+            'A szerver nem küldött munkamenet-tokent, ezért az app natívan nem tud bejelentkezni. A backendet frissíteni kell.';
+          return false;
+        }
+
         this.authenticated = result.authenticated;
-        if (isNativeApp() && result.token) {
+        if (isNativeApp()) {
           // A tokenmentés hibája a natív perzisztenciát érinti, nem a
           // hitelesítést: a szerver már elfogadta a jelszót, ezért ez nem
           // futhat bele a lenti catch ágba, ami "Hibás jelszó"-t jelentene.
@@ -63,19 +82,39 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      // A helyi hitelesítő adatok törlése kliensoldali művelet: nem
-      // függhet a szerver elérhetőségétől. A `finally` biztosítja, hogy a
-      // token és az állapot akkor is törlődjön, ha a szerveres kijelentkezés
-      // elhasal (nincs hálózat, szerverhiba, 401) — az eredeti hibát viszont
-      // nem nyeljük el, az továbbterjed a hívóhoz.
+      // A helyi állapot törlése kliensoldali művelet: nem függhet a szerver
+      // elérhetőségétől. Az állapotot MINDIG a tokentörlés előtt állítjuk
+      // vissza, és a tokentörlés MINDIG lefut, függetlenül attól, hogy a
+      // szerveres kijelentkezés sikerült-e — ha bármelyik itt blokkolná
+      // (vagy kihagyná) a másikat, a router guard "authenticated: true"
+      // mellett, illetve egy lemezen maradt érvényes tokennel visszadobná a
+      // felhasználót az appba egy explicit kijelentkezés után (lásd a
+      // review 2. pontját).
+      //
+      // Az eredeti szerverhibát ez a metódus nem nyeli el: elmentjük, és a
+      // két helyi takarítás után újradobjuk, hogy a hívó (App.vue) naplózni
+      // tudja — de csak AZUTÁN, hogy mindkét takarítás lefutott, különben
+      // egy `try`/`finally`-on átdobott hiba kihagyná a rá következő kódot.
+      let logoutError = null;
       try {
         await apiClient.post('/auth/logout');
+      } catch (error) {
+        logoutError = error;
       } finally {
-        if (isNativeApp()) {
-          await clearToken();
-        }
         this.authenticated = false;
         this.checked = true;
+      }
+
+      if (isNativeApp()) {
+        try {
+          await clearToken();
+        } catch (error) {
+          console.error('A munkamenet-token törlése nem sikerült:', error);
+        }
+      }
+
+      if (logoutError) {
+        throw logoutError;
       }
     },
   },
