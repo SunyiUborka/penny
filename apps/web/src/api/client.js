@@ -48,6 +48,18 @@ async function request(method, path, options = {}) {
   });
 
   if (response.status === 401 && path !== '/auth/me') {
+    // A store-t itt, hívás pillanatában (dinamikusan) importáljuk, nem a
+    // fájl tetején: az auth.js maga importálja ezt a modult (`apiClient`),
+    // egy statikus import kör tehát a modulbetöltés sorrendjétől függő,
+    // törékeny inicializálást eredményezne.
+    const { useAuthStore } = await import('../stores/auth.js');
+    const authStore = useAuthStore();
+    // Előbb jelöljük hitelesítetlennek a store-t, csak utána navigálunk —
+    // különben a router guard "authenticated: true" mellett azonnal
+    // visszadobná ide a felhasználót, végtelen kérés-hurkot okozva (lásd a
+    // review 1. pontját).
+    authStore.authenticated = false;
+    authStore.checked = true;
     const redirect = router.currentRoute.value.fullPath;
     if (router.currentRoute.value.name !== 'login') {
       router.push({ name: 'login', query: { redirect } });
