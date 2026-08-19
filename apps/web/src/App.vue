@@ -24,8 +24,17 @@ function handleToggleTheme() {
 }
 
 async function handleLogout() {
-  await authStore.logout();
-  router.push({ name: 'login' });
+  try {
+    await authStore.logout();
+  } catch (error) {
+    // A store már törölte a helyi munkamenetet/tokent a szerveres hívás
+    // kimenetelétől függetlenül (lásd auth.js logout), ezért a szerveres
+    // hívás hibája (offline, szerverhiba) itt már csak naplózandó — nem
+    // akadályozhatja az átirányítást, és nem maradhat kezeletlen rejection.
+    console.error('A szerveres kijelentkezés nem sikerült:', error);
+  } finally {
+    router.push({ name: 'login' });
+  }
 }
 </script>
 
