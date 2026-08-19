@@ -1192,7 +1192,6 @@ npm install -w @filler/web @capacitor/share@latest
 import { Share } from '@capacitor/share';
 
 const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
-const shareError = ref('');
 ```
 
 Az import sorokhoz:
@@ -1217,7 +1216,6 @@ function buildShareText() {
 }
 
 async function handleShare() {
-  shareError.value = '';
   try {
     await Share.share({
       title: `${props.event.name} — elszámolás`,
@@ -1225,9 +1223,10 @@ async function handleShare() {
       dialogTitle: 'Elszámolás megosztása',
     });
   } catch {
-    // A megosztó lap bezárása is hibaként jön vissza; ezt nem jelezzük
-    // hibaüzenettel, csak a tényleges küldési hibát.
-    shareError.value = '';
+    // Szándékosan üres: az Android a megosztó lap egyszerű bezárását is
+    // hibaként adja vissza, és a plugin nem ad stabil hibakódot, amivel a
+    // megszakítás a tényleges küldési hibától megkülönböztethető lenne. Egy
+    // hibaüzenet ezért minden egyszerű elvetésnél félrejelezne.
   }
 }
 ```
@@ -1239,16 +1238,15 @@ Ellenőrizd a `props.event` mezőnevét: ha az eseménynek nem `name`, hanem má
 A `<template>`-ben a „Ki fizet kinek" lista (`settlement__transfers`) záró `</ul>` tagje után:
 
 ```html
-<button
-  v-if="shareSupported && !hasNothingToSettle"
-  type="button"
-  class="btn settlement__share"
-  @click="handleShare"
->
+<button v-if="shareSupported" type="button" class="btn settlement__share" @click="handleShare">
   Megosztás
 </button>
-<p v-if="shareError" role="alert" class="settlement__status">{{ shareError }}</p>
 ```
+
+A `!hasNothingToSettle` feltétel szándékosan nincs a `v-if`-ben: ez a blokk a
+`hasNothingToSettle` ág `v-else`-ében van, tehát ott már garantáltan hamis.
+
+````
 
 - [ ] **Step 4: App-ikonok generálása**
 
@@ -1258,7 +1256,7 @@ mkdir -p apps/mobile/assets
 cp apps/web/public/icons/icon-512.png apps/mobile/assets/icon.png
 cp apps/web/public/icons/icon-maskable-512.png apps/mobile/assets/icon-foreground.png
 cd apps/mobile && npx capacitor-assets generate --android
-```
+````
 
 Ha az eszköz háttérszínt is kér (`icon-background.png`), a bankjegyzöld `#2F6B4F` egyszínű 512×512-es PNG-t generálj a `scripts/generate-icons.js` mintájára, vagy add meg a `--iconBackgroundColor '#2F6B4F'` kapcsolót.
 
@@ -1303,24 +1301,49 @@ git commit -m "feat: natív megosztás az elszámoláson és Android app-ikonok"
 - Consumes: Task 4 (gradle projekt), Task 3 (SDK).
 - Produces: `npm run release:mobile` — aláírt release APK-t készít az `apps/mobile/android/app/build/outputs/apk/release/` alá.
 
-- [ ] **Step 1: Készíts release kulcsot**
+- [ ] **Step 1: Készíts release kulcsot (nem interaktívan)**
+
+A `keytool` alapból jelszót kérdez a terminálon, ami scriptelt futtatásnál
+elakad. Ezért generált, hosszú random jelszóval dolgozunk, és minden választ
+kapcsolóként adunk meg:
 
 ```bash
 mkdir -p ~/.android-keystore
-keytool -genkey -v -keystore ~/.android-keystore/filler.jks -keyalg RSA -keysize 2048 -validity 10000 -alias filler
+KS_PASS="$(openssl rand -base64 33)"
+keytool -genkeypair -v \
+  -keystore ~/.android-keystore/filler.jks \
+  -storetype PKCS12 \
+  -storepass "$KS_PASS" -keypass "$KS_PASS" \
+  -alias filler -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=Filler, OU=Self-hosted, O=Filler, L=Budapest, C=HU"
+chmod 600 ~/.android-keystore/filler.jks
 ```
 
-Írd fel a megadott jelszavakat. **Ezt a fájlt mentsd el egy másik eszközre is** — ha elvész, a következő APK-t nem lehet a régi fölé telepíteni, csak az app törlésével, és a törléssel az app minden helyi adata elvész.
+PKCS12 formátumnál a store és a kulcs jelszava azonos — ezért egy értéket
+használunk mindkettőre.
+
+> **A kulcsot és a jelszófájlt is menteni kell** egy másik eszközre. Ha elvész,
+> a következő APK-t nem lehet a régi fölé telepíteni, csak az app törlésével —
+> és a törléssel az app minden helyi adata (token, offline sor) elvész.
 
 - [ ] **Step 2: Helyi (nem verziókövetett) jelszófájl**
 
-`apps/mobile/keystore.properties` (a Task 4-ben már gitignore-olt):
+`apps/mobile/keystore.properties` — a fenti `$KS_PASS` értékkel (a fájl a
+Task 4-ben már gitignore-olt):
 
 ```properties
 storeFile=/home/bubooo/.android-keystore/filler.jks
-storePassword=<a keystore jelszava>
+storePassword=<a generált jelszó>
 keyAlias=filler
-keyPassword=<a kulcs jelszava>
+keyPassword=<ugyanaz a generált jelszó>
+```
+
+Vedd fel az `apps/mobile/.gitignore`-ba a kulcsanyagot is, ne csak a
+jelszófájlt — enélkül egy repóba tett `.jks` véletlenül commitolható:
+
+```
+*.jks
+*.keystore
 ```
 
 `apps/mobile/keystore.properties.example` (ez commitolható):
