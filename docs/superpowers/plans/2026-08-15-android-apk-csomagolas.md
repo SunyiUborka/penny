@@ -505,20 +505,25 @@ git commit -m "feat(mobile): Capacitor projekt és Android platform"
 
 ---
 
-### Task 5: Natív futásidejű környezet — platform-felismerés és szerver-cím
+### Task 5: Natív platform-felismerés
+
+> **Módosított terjedelem.** Az eredeti Task 5 egy appon belül átírható
+> szervercímet is tartalmazott. A review után a döntés: a cím fordítási időben
+> fix, futásidőben nem állítható. Ez a task ezért csak a platform-felismerést
+> és a service worker natív kihagyását tartalmazza; a `@capacitor/preferences`
+> és a natív init modul a Task 6-ba került, ahol a token miatt tényleg kell.
 
 **Files:**
 
-- Create: `apps/web/src/utils/platform.js`, `apps/web/src/native/runtime.js`
-- Modify: `apps/web/src/main.js` (teljes fájl átstrukturálása bootstrap függvényre), `apps/web/src/views/SettingsView.vue` (új szekció)
-- Modify: `apps/web/package.json` (`dependencies`: `@capacitor/preferences`)
+- Create: `apps/web/src/utils/platform.js`
+- Modify: `apps/web/src/main.js` (service worker feltétele), `apps/web/src/api/baseUrl.js` (a futásidejű felülírás eltávolítása)
 
 **Interfaces:**
 
-- Consumes: Task 1 (`getApiBase`, `setApiBase`, `getDefaultApiBase`), Task 4 (Capacitor a WebView-ban).
-- Produces:
-  - `isNativeApp(): boolean` a `apps/web/src/utils/platform.js`-ből,
-  - `initNativeRuntime(): Promise<void>` és `saveServerUrl(url: string): Promise<void>` a `apps/web/src/native/runtime.js`-ből.
+- Consumes: Task 1 (`getApiBase`).
+- Produces: `isNativeApp(): boolean` a `apps/web/src/utils/platform.js`-ből.
+  A `apps/web/src/api/baseUrl.js` a `setApiBase` és `getDefaultApiBase`
+  exportokat **nem** tartalmazza — a bázis-URL a build után nem változik.
 
 - [ ] **Step 1: Platform-felismerő util**
 
@@ -535,176 +540,48 @@ export function isNativeApp() {
 }
 ```
 
-- [ ] **Step 2: Telepítsd a Preferences plugint**
+- [ ] **Step 2: A bázis-URL fix a build után**
 
-```bash
-npm install -w @filler/web @capacitor/preferences@latest
-```
+`apps/web/src/api/baseUrl.js` — töröld a `setApiBase` és `getDefaultApiBase`
+exportokat, és vond össze a két konstanst egyre. A fájl fejkommentje ne állítsa,
+hogy a felhasználó futásidőben felülírhatja — mondja azt, hogy az érték
+fordítási időben, a `VITE_API_BASE_URL`-ből dől el, tehát szervercím-váltáshoz
+új APK kell.
 
-- [ ] **Step 3: Natív runtime modul**
+- [ ] **Step 3: Service worker kihagyása a natív appban**
 
-`apps/web/src/native/runtime.js`:
-
-```js
-import { Preferences } from '@capacitor/preferences';
-import { getDefaultApiBase, setApiBase } from '../api/baseUrl.js';
-import { isNativeApp } from '../utils/platform.js';
-
-const SERVER_URL_KEY = 'server_url';
-
-/**
- * A natív app indulási teendői, még az első render előtt: a felhasználó által
- * beállított szervercím visszatöltése. A weben no-op.
- * @returns {Promise<void>}
- */
-export async function initNativeRuntime() {
-  if (!isNativeApp()) {
-    return;
-  }
-  const { value } = await Preferences.get({ key: SERVER_URL_KEY });
-  if (value) {
-    setApiBase(value);
-  }
-}
-
-/**
- * A beállított szervercím elmentése és azonnali alkalmazása. Üres értékre a
- * beépített (fordítási idejű) alapértelmezés áll vissza.
- * @param {string} url
- * @returns {Promise<void>}
- */
-export async function saveServerUrl(url) {
-  const trimmed = url.trim();
-  if (!trimmed) {
-    await Preferences.remove({ key: SERVER_URL_KEY });
-    setApiBase(getDefaultApiBase());
-    return;
-  }
-  await Preferences.set({ key: SERVER_URL_KEY, value: trimmed });
-  setApiBase(trimmed);
-}
-```
-
-- [ ] **Step 4: Indítsd az appot a runtime init után**
-
-`apps/web/src/main.js` teljes tartalma:
+`apps/web/src/main.js` — a regisztráció feltétele kapja meg a `!isNativeApp()`
+tagot is (az `import.meta.env.PROD` marad):
 
 ```js
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import App from './App.vue';
-import { router } from './router/index.js';
-import { initTheme } from './utils/theme.js';
-import { initNativeRuntime } from './native/runtime.js';
 import { isNativeApp } from './utils/platform.js';
-import './assets/theme.css';
+```
 
-/**
- * A mount előtt meg kell várni a natív runtime-ot: a router guard rögtön
- * hitelesítést kérdez a szervertől, ehhez pedig már a helyes bázis-URL kell.
- */
-async function bootstrap() {
-  initTheme();
-  await initNativeRuntime();
-
-  const app = createApp(App);
-  app.use(createPinia());
-  app.use(router);
-  app.mount('#app');
-}
-
-bootstrap().catch((error) => {
-  console.error('Az app indítása nem sikerült:', error);
-});
-
+```js
 // Service worker csak a böngészős produkciós buildben: fejlesztői módban a
 // Vite HMR-jével akadna össze, a natív appban pedig felesleges — ott a
 // WebView helyi fájlokról tölt.
 if (import.meta.env.PROD && !isNativeApp() && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('A service worker regisztrációja nem sikerült:', error);
-    });
-  });
-}
 ```
 
-- [ ] **Step 5: Szerver-cím mező a Beállításokban**
-
-`apps/web/src/views/SettingsView.vue` — a `<script setup>` blokk bővítése:
-
-```js
-import { getApiBase } from '../api/baseUrl.js';
-import { saveServerUrl } from '../native/runtime.js';
-import { isNativeApp } from '../utils/platform.js';
-
-const nativeApp = isNativeApp();
-const serverUrl = ref(getApiBase());
-const serverUrlSaved = ref(false);
-const serverUrlError = ref('');
-
-async function handleSaveServerUrl() {
-  serverUrlSaved.value = false;
-  serverUrlError.value = '';
-  try {
-    await saveServerUrl(serverUrl.value);
-    serverUrl.value = getApiBase();
-    serverUrlSaved.value = true;
-  } catch {
-    serverUrlError.value = 'Nem sikerült elmenteni a szerver címét.';
-  }
-}
-```
-
-A `<template>` végére, az utolsó szekció után:
-
-```html
-<section v-if="nativeApp" class="settings__section">
-  <h2>Szerver</h2>
-  <p class="settings__hint">
-    Az app ezt a címet hívja. Csak akkor írd át, ha a szerver máshova költözött, vagy helyi
-    hálózaton szeretnéd elérni.
-  </p>
-  <div class="field">
-    <label for="server-url">Szerver címe</label>
-    <input id="server-url" v-model="serverUrl" type="url" inputmode="url" autocomplete="off" />
-  </div>
-  <button type="button" class="btn btn--primary" @click="handleSaveServerUrl">Mentés</button>
-  <p v-if="serverUrlSaved" class="settings__hint">Elmentve. A cím azonnal érvényes.</p>
-  <p v-if="serverUrlError" role="alert" class="field-error">{{ serverUrlError }}</p>
-</section>
-```
-
-A `settings__section`, `settings__hint`, `field`, `field-error`, `btn btn--primary` osztályok már léteznek a fájlban, illetve a `theme.css`-ben — ne vezess be új vizuális stílust.
-
-- [ ] **Step 6: Ellenőrzés — a webes build viselkedése nem változott**
+- [ ] **Step 4: Ellenőrzés**
 
 ```bash
 npm run lint
 npm run format:check
 npm run build -w @filler/web
-docker compose up -d --build
+npm run build:mobile
 ```
 
-Nyisd meg a `http://localhost:8090` címet. Elvárt: az app betölt, bejelentkezés működik, a Beállítások oldalon **nem** jelenik meg a „Szerver" szekció.
+Elvárt: mind hibátlan. Ezen felül `grep`-pel igazold, hogy a `apps/web/src`
+alatt semmi nem importálja a `setApiBase`-t vagy a `getDefaultApiBase`-t, és
+hogy a webes build kimenete továbbra is a relatív `/api` bázist tartalmazza.
 
-- [ ] **Step 7: Ellenőrzés — a natív app eléri a szervert**
-
-Csatlakoztasd a telefont USB-n, engedélyezd az USB-hibakeresést, majd:
-
-```bash
-MOBILE_API_BASE_URL=https://bill.p1ckle.xyz/api npm run build:mobile
-cd apps/mobile/android && ./gradlew installDebug
-adb logcat -c && adb logcat | grep -i "chromium\|capacitor"
-```
-
-Indítsd el az appot a telefonon. Elvárt: a bejelentkezési képernyő megjelenik, a Beállítások oldalon látszik a „Szerver" szekció a beépített címmel.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/src/utils/platform.js apps/web/src/native/runtime.js apps/web/src/main.js apps/web/src/views/SettingsView.vue apps/web/package.json package-lock.json
-git commit -m "feat(web): natív futásidejű környezet és beállítható szervercím"
+git add apps/web/src/utils/platform.js apps/web/src/main.js apps/web/src/api/baseUrl.js
+git commit -m "feat(web): natív platform-felismerés, fix bázis-URL"
 ```
 
 ---
@@ -714,11 +591,20 @@ git commit -m "feat(web): natív futásidejű környezet és beállítható szer
 **Files:**
 
 - Create: `apps/web/src/native/token.js`
-- Modify: `apps/web/src/api/client.js` (a `request` fejlécei), `apps/web/src/stores/auth.js` (login/logout), `apps/web/src/native/runtime.js` (token betöltése induláskor)
+- Create: `apps/web/src/native/runtime.js` (a natív indulási teendők; a Task 5 már nem hozza létre)
+- Modify: `apps/web/src/api/client.js` (a `request` fejlécei), `apps/web/src/stores/auth.js` (login/logout), `apps/web/src/main.js` (aszinkron indítás a token betöltéséhez)
 
 **Interfaces:**
 
-- Consumes: Task 2 (`token` a login válaszban, `Authorization: Bearer` elfogadása), Task 5 (`isNativeApp`, `initNativeRuntime`).
+- Consumes: Task 2 (`token` a login válaszban, `Authorization: Bearer` elfogadása), Task 5 (`isNativeApp`).
+- **Ez a task hozza létre** a `apps/web/src/native/runtime.js`-t és az
+  aszinkron indítást a `main.js`-ben (a Task 5 terjedelem-szűkítése miatt), és
+  ez telepíti a `@capacitor/preferences`-t. Az `initNativeRuntime()` egyetlen
+  teendője a token betöltése.
+- **Kötelező robusztussági kikötés:** ha az `initNativeRuntime()` elbukik (pl. a
+  Preferences olvasása hibázik), az app **akkor is mountoljon** — token nélkül,
+  bejelentkezést kérve. Üres, fehér képernyő nem elfogadható kimenet, mert a
+  felhasználónak nincs miből kilábalnia.
 - Produces: `getToken(): string | null`, `loadToken(): Promise<void>`, `setToken(token: string): Promise<void>`, `clearToken(): Promise<void>` a `apps/web/src/native/token.js`-ből.
 
 - [ ] **Step 1: Token modul**
@@ -1457,7 +1343,8 @@ A README „Telepítés Androidra" szakasza után új szakasz, „Android APK" c
 - hogy az APK a PWA **mellett** létezik, nem helyette;
 - az Android SDK telepítésének lépéseit (Task 3), az `ANDROID_HOME` beállításával;
 - a `npm run build:mobile` és `npm run release:mobile` scripteket, és hogy a szerver címét a `MOBILE_API_BASE_URL` környezeti változó állítja (alapértelmezés: `https://bill.p1ckle.xyz/api`);
-- hogy a szerver címe az appon belül, a Beállítások oldalon is átírható, új build nélkül;
+- hogy a szerver címe fordítási időben fix: az appon belül **nem** átírható, tehát domain- vagy hálózatváltáshoz új APK kell a megfelelő `MOBILE_API_BASE_URL` értékkel;
+- hogy a Bearer tokennek nincs szerveroldali lejárata, ezért a visszavonás módja a `.env` `SESSION_SECRET` cseréje — ez egyszerre érvénytelenít minden böngészős sessiont és minden appban tárolt tokent;
 - a keystore-ra vonatkozó figyelmeztetést (elvesztése esetén csak az app törlésével telepíthető új verzió), és a `keystore.properties.example` másolásának lépését;
 - hogy a `versionCode` értékét minden kiadás előtt kézzel kell emelni az `apps/mobile/android/app/build.gradle`-ben;
 - hogy a natív appban nincs SSE — a lista előtérbe kerüléskor és lehúzásra frissül;

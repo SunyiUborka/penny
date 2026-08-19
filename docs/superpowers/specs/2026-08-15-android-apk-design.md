@@ -58,10 +58,13 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
 A webes build viselkedése így nem változik (a változó nincs beállítva → `/api`),
 a mobil build a szerver címét kapja fordítási időben.
 
-Ezen felül az app beállításai közé kerül egy „szerver címe" mező, ami felülírja
-a beépített értéket, és a `@capacitor/preferences`-ben tárolódik. Cél: ne
-kelljen új APK, ha a domain változik, vagy ha LAN-on szeretnéd használni. A
-mező csak a mobil buildben látszik.
+A cím **fordítási időben eldől, és futásidőben nem írható át** (a döntés a
+Task 5 review-ja után született): az appon belül nincs „szerver címe" mező.
+Következmény: ha a szerver máshova költözik, vagy LAN-on szeretnéd elérni, új
+APK-t kell építeni a megfelelő `MOBILE_API_BASE_URL` értékkel. Az indoklás,
+hogy egy szabadon átírható cím némán félre tudja küldeni a kéréseket (pl.
+protokoll nélkül megadva a saját oldal origójára esik vissza), és ez a hiba
+nehezen felismerhető.
 
 ### Transport
 
