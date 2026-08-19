@@ -41,7 +41,14 @@ export const useAuthStore = defineStore('auth', {
         );
         this.authenticated = result.authenticated;
         if (isNativeApp() && result.token) {
-          await setToken(result.token);
+          // A tokenmentés hibája a natív perzisztenciát érinti, nem a
+          // hitelesítést: a szerver már elfogadta a jelszót, ezért ez nem
+          // futhat bele a lenti catch ágba, ami "Hibás jelszó"-t jelentene.
+          try {
+            await setToken(result.token);
+          } catch (storageError) {
+            console.error('A munkamenet-token mentése nem sikerült:', storageError);
+          }
         }
         this.checked = true;
         return true;
@@ -56,12 +63,20 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      await apiClient.post('/auth/logout');
-      if (isNativeApp()) {
-        await clearToken();
+      // A helyi hitelesítő adatok törlése kliensoldali művelet: nem
+      // függhet a szerver elérhetőségétől. A `finally` biztosítja, hogy a
+      // token és az állapot akkor is törlődjön, ha a szerveres kijelentkezés
+      // elhasal (nincs hálózat, szerverhiba, 401) — az eredeti hibát viszont
+      // nem nyeljük el, az továbbterjed a hívóhoz.
+      try {
+        await apiClient.post('/auth/logout');
+      } finally {
+        if (isNativeApp()) {
+          await clearToken();
+        }
+        this.authenticated = false;
+        this.checked = true;
       }
-      this.authenticated = false;
-      this.checked = true;
     },
   },
 });
