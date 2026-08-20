@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { Share } from '@capacitor/share';
-import { formatMoney, SETTLEMENT_CURRENCY, settlementResponseSchema } from '@filler/shared';
-import { apiClient } from '../api/client.js';
+import { computeSettlement, formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
+import { useExpensesStore } from '../stores/expenses.js';
 import { isNativeApp } from '../utils/platform.js';
 
 const props = defineProps({
@@ -10,26 +10,29 @@ const props = defineProps({
   people: { type: Array, required: true },
 });
 
-const settlement = ref(null);
-const loading = ref(true);
-const loadError = ref(false);
+const expensesStore = useExpensesStore();
+
+/**
+ * Az elszámolás a betöltött kiadáslistából számolva. Ugyanaz a
+ * `computeSettlement` fut, amit a backend `/settlement` végpontja használ —
+ * ezért nem kell külön kérés, és a stream minden új kiadását azonnal követi.
+ */
+const settlement = computed(() => {
+  return computeSettlement({
+    participantIds: props.event.participantIds,
+    expenses: expensesStore.expenses.map((expense) => ({
+      payerId: expense.payerId,
+      baseAmountMinor: expense.baseAmountMinor,
+      sharedWithIds: expense.sharedWithIds,
+    })),
+  });
+});
+
+// A betöltés és a hiba állapota a kiadáslistáé: az elszámolásnak nincs saját
+// kérése. Hiba esetén nem üres táblát mutatunk, hanem hibaüzenetet.
+const loading = computed(() => expensesStore.loading);
+const loadError = computed(() => expensesStore.error !== null);
 const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
-
-async function load() {
-  loading.value = true;
-  loadError.value = false;
-  try {
-    settlement.value = await apiClient.get(`/events/${props.event.id}/settlement`, {
-      schema: settlementResponseSchema,
-    });
-  } catch {
-    loadError.value = true;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
 
 function participantName(id) {
   return props.people.find((person) => person.id === id)?.name ?? 'Ismeretlen';
