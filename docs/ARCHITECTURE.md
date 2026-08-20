@@ -516,6 +516,19 @@ Credentials`: a natív kérés nem cookie-val hitelesít, hanem fejléces
 tokennel, és `credentials` opció nélkül megy, tehát a böngésző sosem nézi meg
 ezt a fejlécet rajta.
 
+**Törzs nélküli DELETE a natív appból:** a Capacitor a nem-GET kéréseket az
+Android natív HTTP-rétegén (`HttpURLConnection`) küldi — a `Dalvik/...`
+user-agent ezt el is árulja a szerver naplójában. Ez a réteg a **törzs nélküli**
+kérésekre is ráteszi a saját alapértelmezett
+`application/x-www-form-urlencoded` Content-Type-ját, és ez a JS-réteg alatt
+történik, tehát a kliens nem tudja megakadályozni. A Fastify enélkül minden
+appból érkező `DELETE`-et 415-tel („Unsupported Media Type") utasít el, és a
+törlés némán nem működik a telefonon. Ezért az `app.js` regisztrál egy
+content-type parsert erre a típusra, ami **kizárólag az üres törzset** fogadja
+el (`body = undefined`); egy valódi urlencoded törzs továbbra is 415-öt kap,
+mert az API csak JSON-t vesz. Ne töröld ezt a parsert: nem redundancia, hanem
+az egyetlen pont, ahol ez a platform-kvirk kezelhető.
+
 **Elmaradt üzenetek:** nincs szerveroldali `Last-Event-ID` puffer. Helyette a
 store újrakapcsolódáskor és a fül előtérbe kerülésekor csendben (a
 „Betöltés…" jelző felvillantása nélkül) újratölti a teljes listát. Ez minden

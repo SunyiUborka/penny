@@ -16,6 +16,7 @@ import expensesRoutes from './routes/expenses.js';
 import ratesRoutes from './routes/rates.js';
 import { requireAuth } from './middleware/requireAuth.js';
 import { initPasswordHash } from './services/authService.js';
+import { AppError } from './errors.js';
 
 /**
  * Felépíti a Fastify app instance-t regisztrált plugin-okkal és route-okkal,
@@ -33,6 +34,27 @@ export async function buildApp(env) {
   app.decorate('env', env);
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Az Android natív HTTP-rétege (HttpURLConnection, amin a Capacitor app
+  // nem-GET kérései mennek) a törzs nélküli kérésekre is ráteszi a saját
+  // alapértelmezett `application/x-www-form-urlencoded` Content-Type-ját. Ez a
+  // JS-réteg alatt történik, tehát a kliensünk nem tudja megakadályozni —
+  // enélkül a Fastify az app MINDEN DELETE kérését 415-tel utasítja el
+  // („Unsupported Media Type”), és a törlés némán nem működik a telefonon.
+  //
+  // Csak az ÜRES törzset fogadjuk el ezzel a típussal: egy valódi urlencoded
+  // törzs továbbra is elutasított, mert az API kizárólag JSON-t vesz.
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      if (body === '') {
+        done(null, undefined);
+        return;
+      }
+      done(new AppError('UNSUPPORTED_MEDIA_TYPE', 'Az API kizárólag JSON törzset fogad.', 415));
+    },
+  );
 
   await initPasswordHash(env.APP_PASSWORD);
 
