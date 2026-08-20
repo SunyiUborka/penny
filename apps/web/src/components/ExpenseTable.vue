@@ -60,6 +60,13 @@ function openCreateModal() {
 }
 
 function openEditModal(expense) {
+  if (expense.pending) {
+    // Egy még fel nem töltött sor nem szerkeszthető: a szerkesztés a
+    // szervertől kapott, valódi kiadás azonosítójára támaszkodik, ami egy
+    // pending sornak nincs. A módosítás a szinkron képernyőn kerül majd sorra
+    // (visszavonás + újrafelvitel).
+    return;
+  }
   editingExpense.value = expense;
   formError.value = '';
   showModal.value = true;
