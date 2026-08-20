@@ -50,7 +50,9 @@ async function handleSyncNow() {
   message.value = '';
   try {
     const result = await syncOutbox();
-    message.value = `${result.uploaded} elem feltöltve, ${result.failed} elakadt.`;
+    message.value = result.skipped
+      ? 'Már folyik egy feltöltés a háttérben — várj, amíg befejeződik.'
+      : `${result.uploaded} elem feltöltve, ${result.failed} elakadt.`;
   } finally {
     busy.value = false;
     await load();
@@ -91,6 +93,7 @@ async function handleDiscard(entry) {
   if (!confirmed) {
     return;
   }
+  message.value = '';
   await removeEntry(entry.id);
   await load();
 }
@@ -144,6 +147,25 @@ async function handleDiscard(entry) {
 </template>
 
 <style scoped>
+.sync {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+.sync__status {
+  color: var(--ink-soft);
+}
+
+.sync__description {
+  font-weight: 600;
+}
+
+.btn--small {
+  font-size: 0.78rem;
+  padding: 0.4em 0.7em;
+}
+
 .sync__list {
   list-style: none;
   margin: var(--space-4) 0 0;
