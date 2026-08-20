@@ -5,6 +5,7 @@ import { router } from './router/index.js';
 import { initTheme } from './utils/theme.js';
 import { isNativeApp } from './utils/platform.js';
 import { initNativeRuntime } from './native/runtime.js';
+import { startAutoSync } from './offline/sync.js';
 import './assets/theme.css';
 
 initTheme();
@@ -32,6 +33,20 @@ async function bootstrap() {
   app.use(createPinia());
   app.use(router);
   app.mount('#app');
+
+  // A szinkron-motort csak a Pinia beillesztése (és a mountolás) UTÁN
+  // indítjuk: az outbox számlálóit egy Pinia store tartja, egy korábbi
+  // hívás "nincs aktív Pinia" hibával bukna. A szinkron a böngészőben is
+  // fut, nem csak natívban — ott is aktív a sorbanállítás (lásd
+  // `offline/outbox.js`), ott is fel kell tölteni, amint van kapcsolat.
+  // Ha az indítás elhasal, az app már mountolva van, tehát ez nem
+  // eredményezhet üres képernyőt — csak azt jelenti, hogy a sorbanállított
+  // elemek a következő manuális újratöltésig várnak.
+  try {
+    await startAutoSync();
+  } catch (error) {
+    console.error('A szinkron-motor indítása nem sikerült:', error);
+  }
 
   // Service worker csak a böngészős produkciós buildben: fejlesztői módban a
   // Vite HMR-jével akadna össze, a natív appban pedig felesleges — ott a
