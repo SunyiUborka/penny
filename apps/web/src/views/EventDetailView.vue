@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ZodError } from 'zod';
+import { ApiError } from '../api/client.js';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
 import { useExpensesStore } from '../stores/expenses.js';
@@ -17,7 +19,13 @@ const expensesStore = useExpensesStore();
 
 const event = ref(null);
 const loading = ref(true);
-const loadError = ref(false);
+/**
+ * A betöltési hiba SZÖVEGE, nem puszta boolean: offline, cache-elt másolat
+ * nélkül a régi „Nem sikerült betölteni az eseményt." a hálózathiányt is
+ * elhallgatta. Üres string = nincs hiba.
+ * @type {import('vue').Ref<string>}
+ */
+const loadError = ref('');
 const activeTab = ref('expenses');
 const showEditModal = ref(false);
 const saving = ref(false);
@@ -43,12 +51,27 @@ const dateRangeLabel = computed(() => {
 
 async function load() {
   loading.value = true;
-  loadError.value = false;
+  loadError.value = '';
   try {
+    // A `fetchPeople` maga sosem dob (a saját `error` állapotába teszi a
+    // hibát), tehát a névjegyzék hiánya nem üríti ki ezt a képernyőt.
     await peopleStore.fetchPeople();
+    // A `fetchEvent` a cache-en keresztül megy (`event:<id>`), tehát offline
+    // is megjön, ha ezt az eseményt korábban már megnyitottuk — és ilyenkor
+    // a képernyő teljes egészében megjelenik: kiadástábla, elszámolás,
+    // „+ Új kiadás" gomb, vagyis az offline írás is elérhető marad.
     event.value = await eventsStore.fetchEvent(route.params.id);
-  } catch {
-    loadError.value = true;
+  } catch (error) {
+    // Ide már csak az jut, amiről a cache sem tud segíteni: vagy a szerver
+    // válaszolt (`ApiError`, pl. 404 törölt eseményre) / megtört a
+    // kontraktus (`ZodError`) — ezeket a `fetchWithCache` szándékosan nem
+    // takarja el —, vagy átvitel-szintű hiba történt ÉS ehhez az eseményhez
+    // nincs helyi másolat. A kettő nem ugyanaz, és a felhasználónak sem
+    // ugyanazt kell tennie, ezért nem mondhatjuk rájuk ugyanazt.
+    loadError.value =
+      error instanceof ApiError || error instanceof ZodError
+        ? 'Nem sikerült betölteni az eseményt.'
+        : 'Nincs kapcsolat, és ez az esemény még nem szerepel a helyi tárban. Kapcsolódj a hálózathoz, és nyisd meg újra.';
   } finally {
     loading.value = false;
   }
@@ -65,7 +88,9 @@ async function load() {
  */
 async function refreshEventQuietly() {
   try {
-    event.value = await eventsStore.fetchEvent(route.params.id);
+    // Szándékosan a cache-tartalék NÉLKÜLI változat: itt már látszik egy
+    // esemény, egy cache-re-esés csak lecserélhetné egy régebbi másolatra.
+    event.value = await eventsStore.refreshEvent(route.params.id);
   } catch {
     // Csendben bukik is: a látható (esetleg elavult) esemény többet ér egy
     // hibaüzenetnél, a következő újrakapcsolódás vagy előtér-váltás
@@ -152,9 +177,7 @@ async function handleDelete() {
 <template>
   <main class="event-detail">
     <p v-if="loading" class="event-detail__status">Betöltés…</p>
-    <p v-else-if="loadError" role="alert" class="event-detail__status">
-      Nem sikerült betölteni az eseményt.
-    </p>
+    <p v-else-if="loadError" role="alert" class="event-detail__status">{{ loadError }}</p>
 
     <template v-else>
       <header class="receipt event-detail__header">
