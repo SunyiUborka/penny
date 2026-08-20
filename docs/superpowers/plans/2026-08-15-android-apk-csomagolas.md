@@ -1492,9 +1492,48 @@ git commit -m "feat(mobile): release aláírás, build script és dokumentáció
 
 ## Utóellenőrzés (a terv végén, egyszer)
 
-- [ ] `npm run lint` és `npm run format:check` hibátlan
-- [ ] `npm run build` (mindhárom workspace) sikeres
-- [ ] `docker compose up -d --build` után a böngészős app működik: bejelentkezés, esemény, kiadás felvitele, élő frissítés két fülön, elszámolás
-- [ ] A telefonra telepített release APK működik: bejelentkezés, esemény, kiadás felvitele, elszámolás, megosztás
-- [ ] Az app teljes bezárása után is bejelentkezve marad
-- [ ] `git status --short` üres
+Gépen elvégezve, a végrehajtás során:
+
+- [x] `npm run lint` és `npm run format:check` hibátlan
+- [x] `npm run build` (mindhárom workspace) sikeres
+- [x] `npm run build:mobile` sikeres, és `cap sync` után is megmarad az
+      `allowBackup="false"`, illetve a szinkronizált assetek a mobil bázis-URL-t
+      tartalmazzák
+- [x] Aláírt release APK elkészül, `apksigner verify --print-certs` sikeres
+- [x] `git status --short` üres, titok nincs a repóban
+
+## Eszközös ellenőrzés (még hátra van)
+
+A fejlesztés alatt **nem volt csatlakoztatott telefon és böngésző sem**, ezért a
+natív viselkedés egyetlen sora sem futott le: a bizonyíték kódolvasás, sikeres
+buildek és az aláírás-ellenőrzés. Az alábbi sorrend a legerősebb bizonyítékkal
+kezd — ami itt elbukik, az a legtöbb feltevést dönti meg.
+
+- [ ] **Elindul-e egyáltalán**: splash → bejelentkező képernyő. Ha a WebView nem
+      tölti be a helyi `assets/public/index.html`-t, minden alábbi értelmetlen.
+- [ ] **A `CapacitorHttp` válaszkezelése** — a legkevésbé bizonyított terület.
+      Négy választípus: hibás jelszó (401 JSON hibatörzs → „Hibás jelszó.",
+      ne néma elakadás), sikeres lista-GET, kiadás törlése (204, üres törzs — ne
+      dobjon a `text()` → `JSON.parse` úton), és egy validációs hiba (400) a
+      modalban. A töréspont a `apps/web/src/api/client.js` válaszfeldolgozása.
+- [ ] **Valóban a Bearer token hitelesít?** Óvatosan: a `CapacitorHttp` mellett
+      az Android natív cookie-tárolója eltárolja és visszajátssza a login
+      `Set-Cookie`-ját, ezért az „újraindítás után is bejelentkezve" akkor is
+      sikerülhet, ha a token teljesen rossz. Különítsd el: figyeld a szerver
+      access logját vagy az `adb logcat`-et az `Authorization` fejlécre.
+- [ ] **Token-perzisztencia és kilépés teljes leállítás mellett**: belépés →
+      app kisöprése → újraindítás (ne kérjen jelszót); majd „Kilépés" →
+      újraindítás (kérjen jelszót).
+- [ ] **Előtérbe-kerüléses frissítés**: vegyél fel egy kiadást böngészőből,
+      váltts el az appból és vissza — a lista frissül; és a telefonon az
+      „élő / nincs kapcsolat" jelző valóban nem látszik.
+- [ ] **Lehúzásos frissítés a hibamódokkal együtt**: csak a lista tetején
+      induljon; elgörgetve ne; nyitott kiadás-modállal (a figyelők a `window`-on
+      vannak); és egy **megszakított** mozdulattal (húzd le közben az értesítési
+      sávot) — a jelző ne ragadjon a képernyőn.
+- [ ] **Megosztás** az elszámolás fülről: megnyílik a lap, a beillesztett
+      szövegben a magyar karakterek és a `→` nyíl is helyes, az összegek
+      formázottak.
+- [ ] **Ikon és név** az indítóban és az app-váltóban; majd a release APK
+      telepítése egy eltávolított debug build helyére (különböző aláírás miatt
+      előbb el kell távolítani).
