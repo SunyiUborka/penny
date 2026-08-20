@@ -271,25 +271,47 @@ async function withFreshRate(payload) {
  * @returns {Promise<void>}
  */
 export async function startAutoSync() {
-  await Network.addListener('networkStatusChange', (status) => {
-    if (status.connected) {
-      syncOutbox().catch(() => {
-        // A szinkron hibája nem törheti meg az appot; az elemek a sorban
-        // maradnak, a következő alkalommal újrapróbáljuk.
-      });
-    }
-  });
-
   // Előtérbe kerüléskor is szinkronizálunk. Szándékosan `visibilitychange`,
   // nem a `@capacitor/app` `appStateChange`-e: az élő-frissítés kör óta a
   // stream újrakapcsolódása és a pótló újratöltés is ezen az eseményen áll
   // (lásd `apps/web/src/stores/expenses.js`), és két párhuzamos
   // előtérbe-kerülés-mechanizmus csak széttartani tudna.
+  //
+  // A SORREND ITT LÉNYEGES, ne cseréljük vissza. Ez a listener és a lentebbi
+  // induló `syncOutbox()` az a két dolog, ami nélkül a sorbanállítás
+  // használhatatlan — a hálózatfigyelő ezekhez képest csak egy kényelmi
+  // gyorsítás (előbb indul a feltöltés, mint a következő előtérbe kerülés).
+  // Ezért a nem létfontosságú rész SOSEM állhat a létfontosságú elé: a
+  // `Network.addListener` egy natív plugin-hívás, ami elutasított Promise-t
+  // ad, ha a plugin nincs regisztrálva az adott platformon (a Capacitor
+  // ilyenkor `"Network" plugin is not implemented on android` kivételt dob a
+  // hídon) — ha ez az első utasítás, egyetlen hiányzó natív plugin viszi
+  // magával a `visibilitychange` figyelőt és az induló szinkront is, és az
+  // egész automatikus feltöltés csendben halott marad (lásd a végső review
+  // C1 pontját).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       syncOutbox().catch(() => {});
     }
   });
+
+  try {
+    await Network.addListener('networkStatusChange', (status) => {
+      if (status.connected) {
+        syncOutbox().catch(() => {
+          // A szinkron hibája nem törheti meg az appot; az elemek a sorban
+          // maradnak, a következő alkalommal újrapróbáljuk.
+        });
+      }
+    });
+  } catch (error) {
+    // Nincs hálózatfigyelő (a natív plugin nincs regisztrálva, vagy a hídon
+    // hibázott a feliratkozás). Ez degradált, de nem végzetes állapot: a
+    // kapcsolat visszatérésére nem indul azonnal feltöltés, viszont az
+    // előtérbe kerülés, az indulás és a Szinkronizálás képernyő „Feltöltés
+    // most” gombja mind működik tovább. Csak naplózzuk.
+    console.error('A hálózatfigyelő feliratkozás nem sikerült:', error);
+  }
 
   await syncOutbox();
 }
