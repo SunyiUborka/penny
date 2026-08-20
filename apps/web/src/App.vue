@@ -2,12 +2,14 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth.js';
+import { useOfflineStore } from './stores/offline.js';
 import { getTheme, toggleTheme } from './utils/theme.js';
 import OfflineBanner from './components/OfflineBanner.vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const offlineStore = useOfflineStore();
 
 const showNav = computed(() => route.name !== 'login');
 const theme = ref(getTheme());
@@ -53,6 +55,13 @@ async function handleLogout() {
     </button>
     <nav class="app-nav__tabs" :class="{ 'is-open': mobileMenuOpen }">
       <router-link to="/" class="app-nav__tab">Események</router-link>
+      <router-link
+        v-if="offlineStore.pendingCount + offlineStore.failedCount > 0"
+        to="/sync"
+        class="app-nav__tab"
+      >
+        Szinkronizálás ({{ offlineStore.pendingCount + offlineStore.failedCount }})
+      </router-link>
       <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
     </nav>
     <button
