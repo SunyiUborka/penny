@@ -39,14 +39,19 @@ async function bootstrap() {
   // hívás "nincs aktív Pinia" hibával bukna. A szinkron a böngészőben is
   // fut, nem csak natívban — ott is aktív a sorbanállítás (lásd
   // `offline/outbox.js`), ott is fel kell tölteni, amint van kapcsolat.
-  // Ha az indítás elhasal, az app már mountolva van, tehát ez nem
-  // eredményezhet üres képernyőt — csak azt jelenti, hogy a sorbanállított
-  // elemek a következő manuális újratöltésig várnak.
-  try {
-    await startAutoSync();
-  } catch (error) {
+  //
+  // Szándékosan nem várjuk meg (`await` nélkül): az induló szinkron
+  // hálózati kéréseket indíthat, ez pedig nem torlaszolhatja el az utána
+  // következő teendőket — legfőképp a lenti service worker regisztrációt,
+  // ami a `load` eseményre vár. Ha az induló szinkron addig tartana, amíg a
+  // `load` már lefutott, a feliratkozás lemaradna, és a service worker
+  // csendben nem települne/frissülne abban a munkamenetben. A hibát csak
+  // naplózzuk: sem az app mountolását, sem az utána következő teendőket nem
+  // akaszthatja meg — a sorbanállított elemek a következő hálózat- vagy
+  // előtérbe-kerülés-eseményig egyszerűen várnak.
+  startAutoSync().catch((error) => {
     console.error('A szinkron-motor indítása nem sikerült:', error);
-  }
+  });
 
   // Service worker csak a böngészős produkciós buildben: fejlesztői módban a
   // Vite HMR-jével akadna össze, a natív appban pedig felesleges — ott a
