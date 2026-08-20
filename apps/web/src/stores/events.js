@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { eventListResponseSchema, eventResponseSchema } from '@filler/shared';
 import { apiClient } from '../api/client.js';
+import { fetchWithCache } from '../offline/cache.js';
 
 export const useEventsStore = defineStore('events', {
   state: () => ({
@@ -13,7 +14,12 @@ export const useEventsStore = defineStore('events', {
       this.loading = true;
       this.error = null;
       try {
-        this.events = await apiClient.get('/events', { schema: eventListResponseSchema });
+        const result = await fetchWithCache({
+          key: 'events',
+          schema: eventListResponseSchema,
+          request: () => apiClient.get('/events', { schema: eventListResponseSchema }),
+        });
+        this.events = result.value;
       } catch (error) {
         this.error = error;
       } finally {

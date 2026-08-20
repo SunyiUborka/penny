@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth.js';
 import { getTheme, toggleTheme } from './utils/theme.js';
+import OfflineBanner from './components/OfflineBanner.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -64,6 +65,7 @@ async function handleLogout() {
     </button>
     <button type="button" class="app-nav__logout" @click="handleLogout">Kilépés</button>
   </header>
+  <OfflineBanner />
   <router-view />
 </template>
 
