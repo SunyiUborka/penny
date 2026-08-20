@@ -16,22 +16,39 @@ const expensesStore = useExpensesStore();
  * Az elszámolás a betöltött kiadáslistából számolva. Ugyanaz a
  * `computeSettlement` fut, amit a backend `/settlement` végpontja használ —
  * ezért nem kell külön kérés, és a stream minden új kiadását azonnal követi.
+ *
+ * `props.event` egyszer, a nézet mountjakor töltődik be, és nem frissül olyan
+ * gyakran, mint a kiadáslista (ami a streamen élőben jön). Ha időközben más
+ * eszközön új résztvevő került az eseményhez, és tőle érkezik kiadás a
+ * streamen, ez a `participantIds` lista már elavult, és a
+ * `computeSettlement` bemenet-validációja (a payerId/sharedWithIds ellenőrzi
+ * a résztvevőséget) eldobja. Ez várható, átmeneti állapot — az
+ * `EventDetailView` újratölti az eseményt újrakapcsolódáskor és
+ * előtér-váltáskor —, és egy hibaüzenet jobb, mint rossz egyenlegeket
+ * mutatni, ezért itt elkapjuk és `null`-t adunk vissza.
  */
 const settlement = computed(() => {
-  return computeSettlement({
-    participantIds: props.event.participantIds,
-    expenses: expensesStore.expenses.map((expense) => ({
-      payerId: expense.payerId,
-      baseAmountMinor: expense.baseAmountMinor,
-      sharedWithIds: expense.sharedWithIds,
-    })),
-  });
+  try {
+    return computeSettlement({
+      participantIds: props.event.participantIds,
+      expenses: expensesStore.expenses.map((expense) => ({
+        payerId: expense.payerId,
+        baseAmountMinor: expense.baseAmountMinor,
+        sharedWithIds: expense.sharedWithIds,
+      })),
+    });
+  } catch {
+    return null;
+  }
 });
 
-// A betöltés és a hiba állapota a kiadáslistáé: az elszámolásnak nincs saját
-// kérése. Hiba esetén nem üres táblát mutatunk, hanem hibaüzenetet.
+// A betöltés állapota a kiadáslistáé: az elszámolásnak nincs saját kérése.
+// Hiba esetén (akár a kiadáslista betöltése bukott, akár a résztvevőlista
+// elavulása miatt a settlement fentebb null-t adott) nem üres táblát
+// mutatunk, hanem hibaüzenetet — ez teszi valódivá a lenti
+// `hasNothingToSettle` `settlement !== null` feltételét is.
 const loading = computed(() => expensesStore.loading);
-const loadError = computed(() => expensesStore.error !== null);
+const loadError = computed(() => expensesStore.error !== null || settlement.value === null);
 const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
 
 function participantName(id) {
