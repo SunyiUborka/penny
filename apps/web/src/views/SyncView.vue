@@ -1,18 +1,49 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { listEntries, markPending, removeEntry } from '../offline/outbox.js';
 import { syncOutbox } from '../offline/sync.js';
 import { formatDate } from '../utils/format.js';
+import { useOfflineStore } from '../stores/offline.js';
+
+const offlineStore = useOfflineStore();
 
 const entries = ref([]);
 const busy = ref(false);
 const message = ref('');
 
+// A `listEntries()` hívások sorrendben indulnak, de nem garantált, hogy
+// sorrendben is térnek vissza (pl. egy a `handleSyncNow` végén indított
+// újratöltés versenyezhet egy közben a háttér-szinkron miatt lefutó
+// `offlineStore`-figyelő kiváltotta újratöltéssel). Egy növekvő token
+// biztosítja, hogy mindig a LEGUTOLJÁRA indított olvasás eredménye íródjon
+// ki — egy korábban indult, de később visszatérő olvasás sosem írhatja
+// felül egy újabb kérés eredményét.
+let loadToken = 0;
+
 async function load() {
-  entries.value = await listEntries();
+  const token = ++loadToken;
+  const rows = await listEntries();
+  if (token === loadToken) {
+    entries.value = rows;
+  }
 }
 
 onMounted(load);
+
+// A várakozó+elakadt darabszám az egyetlen jel, ami a `refreshCounts()`
+// minden hívásakor (minden outbox-mutáción, tehát egy háttérben — nem
+// erről a képernyőről — indított szinkronon is) frissül. Erre iratkozunk
+// fel ahelyett, hogy saját értesítési csatornát vagy pollozást vezetnénk
+// be: ha a szám változik, a lista biztosan elavult, újra kell tölteni. A
+// figyelő a komponenssel együtt (a `<script setup>` hatókörében) jön
+// létre, ezért Vue automatikusan leállítja, amikor a képernyő elhagyásra
+// kerül — nincs szükség kézi leiratkozásra.
+watch(
+  () => offlineStore.pendingCount + offlineStore.failedCount,
+  () => {
+    load();
+  },
+);
 
 async function handleSyncNow() {
   busy.value = true;
@@ -36,20 +67,6 @@ async function handleRetry(entry) {
 
 /**
  * @param {object} entry
- */
-async function handleDiscard(entry) {
-  const confirmed = window.confirm(
-    'Biztosan eldobod ezt a módosítást? Ez véglegesen elvész, és nem kerül fel a szerverre.',
-  );
-  if (!confirmed) {
-    return;
-  }
-  await removeEntry(entry.id);
-  await load();
-}
-
-/**
- * @param {object} entry
  * @returns {string}
  */
 function describe(entry) {
@@ -61,6 +78,21 @@ function describe(entry) {
     return `Módosítás: ${label}`;
   }
   return 'Törlés';
+}
+
+/**
+ * @param {object} entry
+ */
+async function handleDiscard(entry) {
+  const confirmed = window.confirm(
+    `Biztosan eldobod ezt a tételt: „${describe(entry)}” (${formatDate(entry.createdAt)})? ` +
+      'Ez véglegesen elvész, és nem kerül fel a szerverre.',
+  );
+  if (!confirmed) {
+    return;
+  }
+  await removeEntry(entry.id);
+  await load();
 }
 </script>
 
@@ -88,10 +120,20 @@ function describe(entry) {
           </span>
           <span v-else class="sync__meta">Feltöltésre vár</span>
           <span v-if="entry.status === 'failed'" class="sync__actions">
-            <button type="button" class="btn btn--ghost btn--small" @click="handleRetry(entry)">
+            <button
+              type="button"
+              class="btn btn--ghost btn--small"
+              :disabled="busy"
+              @click="handleRetry(entry)"
+            >
               Újra
             </button>
-            <button type="button" class="btn btn--danger btn--small" @click="handleDiscard(entry)">
+            <button
+              type="button"
+              class="btn btn--danger btn--small"
+              :disabled="busy"
+              @click="handleDiscard(entry)"
+            >
               Eldobás
             </button>
           </span>
