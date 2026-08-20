@@ -1,11 +1,13 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import { formatDate } from '../utils/format.js';
+import { isNativeApp } from '../utils/platform.js';
+import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
 const router = useRouter();
 const eventsStore = useEventsStore();
@@ -15,8 +17,29 @@ const showCreateModal = ref(false);
 const saving = ref(false);
 const formError = ref('');
 
+const pullRatio = ref(0);
+let detachPullToRefresh = null;
+
 onMounted(async () => {
   await Promise.all([eventsStore.fetchEvents(), peopleStore.fetchPeople()]);
+
+  // A lehúzásos gesztus natív affordance: böngészőben nincs rá szükség, ott
+  // az oldal újratöltése a megszokott mozdulat.
+  if (isNativeApp()) {
+    detachPullToRefresh = attachPullToRefresh({
+      onRefresh: () => eventsStore.refreshQuietly(),
+      onProgress: (ratio) => {
+        pullRatio.value = ratio;
+      },
+    });
+  }
+});
+
+onUnmounted(() => {
+  if (detachPullToRefresh) {
+    detachPullToRefresh();
+    detachPullToRefresh = null;
+  }
 });
 
 function participantNames(event) {
@@ -56,6 +79,10 @@ async function toggleArchived(event) {
         + Új esemény
       </button>
     </div>
+
+    <p v-if="pullRatio > 0" class="events__pull" :style="{ opacity: pullRatio }">
+      {{ pullRatio >= 1 ? 'Frissítés…' : 'Húzd lejjebb a frissítéshez' }}
+    </p>
 
     <p v-if="eventsStore.loading || peopleStore.loading" class="events__status">Betöltés…</p>
     <p v-else-if="eventsStore.error" role="alert" class="events__status">
@@ -288,5 +315,12 @@ async function toggleArchived(event) {
   .events__table td[data-label='']::before {
     content: none;
   }
+}
+
+.events__pull {
+  margin: 0 0 var(--space-2);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }
 </style>

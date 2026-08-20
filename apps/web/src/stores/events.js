@@ -22,6 +22,21 @@ export const useEventsStore = defineStore('events', {
     },
 
     /**
+     * Újratöltés a „Betöltés…" állapot felvillantása nélkül. Lehúzásos
+     * frissítéskor hívjuk: a lista már látszik, és egy villanó betöltés-jelző
+     * zavaróbb, mint hasznos.
+     * @returns {Promise<void>}
+     */
+    async refreshQuietly() {
+      try {
+        this.events = await apiClient.get('/events', { schema: eventListResponseSchema });
+      } catch {
+        // Csendben bukik is: a látható (elavult) lista többet ér egy
+        // hibaüzenetnél, és a következő frissítés helyrehozza.
+      }
+    },
+
+    /**
      * @param {string} id
      */
     fetchEvent(id) {
