@@ -4,7 +4,7 @@ import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import ExpenseModal from './ExpenseModal.vue';
 import { formatDate } from '../utils/format.js';
-import { isNativeApp, liveUpdatesSupported } from '../utils/platform.js';
+import { isNativeApp } from '../utils/platform.js';
 import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
 const props = defineProps({
@@ -13,7 +13,6 @@ const props = defineProps({
 });
 
 const expensesStore = useExpensesStore();
-const showLiveIndicator = liveUpdatesSupported();
 
 const payerFilter = ref('');
 const showModal = ref(false);
@@ -30,9 +29,8 @@ onMounted(() => {
   expensesStore.fetchExpenses(props.event.id);
 
   // A lehúzásos gesztus natív affordance, nem az SSE hiányának a
-  // helyettesítője — ha a `liveUpdatesSupported()`-nek a jövőben egy másik
-  // (nem natív) oka is lenne a hamis értékre, az ne kapjon böngészőben
-  // touch-gesztust.
+  // helyettesítője — böngészőben ne kapjon touch-gesztust, ott ehelyett az
+  // egérrel is használható kapcsolatjelző jelzi az élő frissítés állapotát.
   if (isNativeApp()) {
     detachPullToRefresh = attachPullToRefresh({
       onRefresh: () => expensesStore.refreshQuietly(props.event.id),
@@ -119,7 +117,6 @@ async function handleDelete(expense) {
         </select>
       </div>
       <p
-        v-if="showLiveIndicator"
         class="expense-table__live"
         :class="{ 'is-offline': !expensesStore.connected }"
         :title="
