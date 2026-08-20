@@ -95,7 +95,10 @@ const pullRatio = ref(0);
 let detachPullToRefresh = null;
 ```
 
-A meglévő `onMounted` blokk **végére**, a `Promise.all` után:
+A meglévő `onMounted` blokk **elejére**, a `Promise.all` ELÉ (nem utána — ha a
+gesztus csatolása a betöltés `await`-je UTÁN futna, egy komponens-unmount a
+betöltés közben leszerelő függvény nélkül maradna, azaz a gesztus a DOM
+eltűnése után is aktív maradna: listener-szivárgás):
 
 ```js
 // A lehúzásos gesztus natív affordance: böngészőben nincs rá szükség, ott
@@ -278,6 +281,13 @@ A szerver a következőket írja a streamre: `retry: 5000\n\n` induláskor, `dat
 
 `apps/web/src/api/eventStream.js`:
 
+**Frissítve a robusztussági javítás (`fix(web): natív SSE-stream
+robusztussági javításai`) és az onOpen/onClose-őrzés után — ez a szakasz a
+ténylegesen leszállított `apps/web/src/api/eventStream.js`-t tükrözi, nem az
+eredeti tervezetet. A korábbi változat nem tartalmazott heartbeat-figyelőt,
+`ATTEMPT_RESET_MS` késleltetett számláló-nullázást, terminális 401/403/404
+ágat, sem a lezárás utáni callback-hívásokat kizáró őrizetet.**
+
 ```js
 import { apiStreamUrl } from './client.js';
 import { getToken } from '../native/token.js';
@@ -286,6 +296,28 @@ import { isNativeApp } from '../utils/platform.js';
 /** Az első újrakapcsolódási várakozás és a felső korlát. */
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 30_000;
+
+/**
+ * Ha ennyi ideig semmi nem érkezik a streamen (se üzenet, se heartbeat),
+ * holtnak tekintjük a kapcsolatot. A szerver 20 másodpercenként ping-el
+ * (lásd HEARTBEAT_MS az apps/api/src/routes/events.js-ben) — ez a korlát
+ * ennek több mint a duplája, hogy egyetlen elveszett ping ne billentse ki
+ * azonnal a kapcsolatot, de egy félig nyitva ragadt socket (pl. wifi/mobil
+ * hálózatváltás közben) se maradjon észrevétlen a következő előtérbe
+ * kerülésig.
+ */
+const HEARTBEAT_TIMEOUT_MS = 45_000;
+
+/**
+ * Meddig kell egy kapcsolatnak élnie ahhoz, hogy „bizonyítottnak” számítson,
+ * és az újrakapcsolódási számláló nullázódjon. Enélkül egy olyan szerver,
+ * ami elfogadja a kérést, majd azonnal EOF-ol (pl. proxy mögött épp
+ * újrainduló API), a számlálót minden körben nullázná — a ciklus
+ * másodpercenként pörögne, és minden `onOpen` egy teljes listafrissítést
+ * váltana ki. A számláló csak akkor nullázódik, ha a kapcsolat ennyi ideig
+ * ténylegesen életben marad.
+ */
+const ATTEMPT_RESET_MS = 3000;
 
 /**
  * Egy SSE-kapcsolat életciklusa, platformfüggetlen felülettel.
@@ -345,18 +377,50 @@ function openWithEventSource(url, options) {
  * @returns {() => void}
  */
 function openWithFetch(url, options) {
-  const state = { closed: false, controller: null };
+  const state = { closed: false, controller: null, retryTimer: null };
 
-  runFetchStream(url, options, state).catch((error) => {
+  // A lezárás (`state.closed = true`) szinkron, de a ciklus nem: ha a
+  // `close()` épp akkor fut le, amikor egy `await webFetch(...)` vagy
+  // `reader.read()` már felbontott ígéretére vár a kód, a végrehajtás a
+  // lezárás UTÁN folytatódna, és `onOpen`/`onMessage` egy már nem
+  // érvényes feliratkozásra futna le (pl. egy közben megnyílt új
+  // feliratkozás store-állapotát rontaná el). Ezért minden callback egy
+  // közös ponton, itt van őrizve — nem szórtan a ciklus belsejében.
+  const guardedOptions = {
+    onOpen: () => {
+      if (!state.closed) {
+        options.onOpen();
+      }
+    },
+    onMessage: (data) => {
+      if (!state.closed) {
+        options.onMessage(data);
+      }
+    },
+    onClose: () => {
+      if (!state.closed) {
+        options.onClose();
+      }
+    },
+  };
+
+  runFetchStream(url, guardedOptions, state).catch((error) => {
     // Ide csak váratlan hiba jut: a hálózati hibákat a ciklus maga kezeli.
     console.error('Az élő frissítés streamje leállt:', error);
-    options.onClose();
+    guardedOptions.onClose();
   });
 
   return () => {
     state.closed = true;
     if (state.controller) {
       state.controller.abort();
+    }
+    if (state.retryTimer) {
+      // A folyamatban lévő újrapróbálkozási várakozást is törölni kell,
+      // különben a lezárt stream másodpercekkel később egy semmit nem érő
+      // újracsatlakozási kísérlettel „ébredne fel”.
+      clearTimeout(state.retryTimer);
+      state.retryTimer = null;
     }
   };
 }
@@ -366,7 +430,7 @@ function openWithFetch(url, options) {
  * leállt szerver ne kapjon másodpercenkénti kéréseket.
  * @param {string} url
  * @param {object} options
- * @param {{ closed: boolean, controller: AbortController | null }} state
+ * @param {{ closed: boolean, controller: AbortController | null, retryTimer: ReturnType<typeof setTimeout> | null }} state
  * @returns {Promise<void>}
  */
 async function runFetchStream(url, options, state) {
@@ -393,6 +457,7 @@ async function runFetchStream(url, options, state) {
     }
 
     state.controller = new AbortController();
+    let terminal = false;
 
     try {
       const response = await webFetch(url, {
@@ -400,24 +465,52 @@ async function runFetchStream(url, options, state) {
         signal: state.controller.signal,
       });
 
+      if (response.status === 401 || response.status === 403) {
+        // Lejárt vagy visszavont token: ugyanazzal a hitelesítő adattal
+        // örökké próbálkozni értelmetlen, és ez az út megkerüli az
+        // apiClient meglévő 401-kezelését is (nem az `apiClient`-en megy
+        // át). A következő bejelentkezés úgyis új feliratkozást nyit.
+        terminal = true;
+        throw new Error(`Hitelesítés elutasítva: ${response.status}`);
+      }
+
+      if (response.status === 404) {
+        // Törölt esemény: a stream soha nem fog megnyílni, amíg ez a nézet
+        // nyitva van. Enélkül a ciklus 30 másodpercenként újra lekérné,
+        // amíg valaki be nem zárja a nézetet.
+        terminal = true;
+        throw new Error(`Az esemény nem található: ${response.status}`);
+      }
+
       if (!response.ok || !response.body) {
         throw new Error(`Váratlan stream-válasz: ${response.status}`);
       }
 
-      attempt = 0;
       options.onOpen();
-      await readStreamBody(response.body, options.onMessage, state);
+
+      // A számlálót csak akkor nullázzuk, ha a kapcsolat ATTEMPT_RESET_MS
+      // ideig ténylegesen életben marad (ld. a konstans kommentjét) — nem
+      // rögtön a fejlécek megérkezésekor.
+      const proveAlive = setTimeout(() => {
+        attempt = 0;
+      }, ATTEMPT_RESET_MS);
+      try {
+        await readStreamBody(response.body, options.onMessage, state);
+      } finally {
+        clearTimeout(proveAlive);
+      }
     } catch {
-      // Megszakadt vagy elutasított kapcsolat: alább újrapróbáljuk.
+      // Megszakadt vagy elutasított kapcsolat: alább újrapróbáljuk (kivéve
+      // hitelesítési hibánál, ld. lent).
     }
 
     options.onClose();
 
-    if (state.closed) {
+    if (terminal) {
       return;
     }
 
-    await delay(Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS));
+    await delay(Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS), state);
     attempt += 1;
   }
 }
@@ -426,35 +519,61 @@ async function runFetchStream(url, options, state) {
  * A választörzs olvasása és SSE-blokkokra bontása. Egy blokk üres sorral
  * záródik; a `data:` sorok törzse az üzenet, a `:` kezdetű sor heartbeat, a
  * `retry:` sor a böngésző `EventSource`-ának szól — mindkettőt eldobjuk.
+ *
+ * Emellett egy "watchdog" időzítőt tart karban: minden beérkező darab
+ * (üzenet vagy heartbeat egyaránt) újraindítja. Ha ez lejár, a kapcsolatot
+ * megszakítjuk — ez az egyetlen módja, hogy egy félig nyitva ragadt
+ * socketet (a `reader.read()` az ilyet a hálózat szintjén sosem venné
+ * észre) a meglévő újrakapcsolódási út feldolgozza.
  * @param {ReadableStream} body
  * @param {(data: string) => void} onMessage
- * @param {{ closed: boolean }} state
+ * @param {{ closed: boolean, controller: AbortController | null, retryTimer: ReturnType<typeof setTimeout> | null }} state
  * @returns {Promise<void>}
  */
 async function readStreamBody(body, onMessage, state) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let watchdog = scheduleHeartbeatWatchdog(state);
 
-  while (!state.closed) {
-    const { value, done } = await reader.read();
-    if (done) {
-      return;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-
-    let separator = buffer.indexOf('\n\n');
-    while (separator !== -1) {
-      const block = buffer.slice(0, separator);
-      buffer = buffer.slice(separator + 2);
-      const payload = dataFromBlock(block);
-      if (payload !== '') {
-        onMessage(payload);
+  try {
+    while (!state.closed) {
+      const { value, done } = await reader.read();
+      if (done) {
+        return;
       }
-      separator = buffer.indexOf('\n\n');
+
+      clearTimeout(watchdog);
+      watchdog = scheduleHeartbeatWatchdog(state);
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let separator = buffer.indexOf('\n\n');
+      while (separator !== -1) {
+        const block = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+        const payload = dataFromBlock(block);
+        if (payload !== '') {
+          onMessage(payload);
+        }
+        separator = buffer.indexOf('\n\n');
+      }
     }
+  } finally {
+    clearTimeout(watchdog);
   }
+}
+
+/**
+ * @param {{ controller: AbortController | null }} state
+ * @returns {ReturnType<typeof setTimeout>}
+ */
+function scheduleHeartbeatWatchdog(state) {
+  return setTimeout(() => {
+    if (state.controller) {
+      state.controller.abort();
+    }
+  }, HEARTBEAT_TIMEOUT_MS);
 }
 
 /**
@@ -471,11 +590,16 @@ function dataFromBlock(block) {
 
 /**
  * @param {number} ms
+ * @param {{ retryTimer: ReturnType<typeof setTimeout> | null }} state a
+ * timer azonosítóját itt tároljuk, hogy a closer törölni tudja
  * @returns {Promise<void>}
  */
-function delay(ms) {
+function delay(ms, state) {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    state.retryTimer = setTimeout(() => {
+      state.retryTimer = null;
+      resolve();
+    }, ms);
   });
 }
 ```

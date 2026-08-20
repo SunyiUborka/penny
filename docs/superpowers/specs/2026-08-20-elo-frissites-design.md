@@ -130,10 +130,17 @@ hibát jelez — nem üres táblát mutat.
 
 ### Backend
 
-Egyetlen változás: az `apps/api/src/app.js` CORS-beállítása engedje a WebView
+Két változás. Az `apps/api/src/app.js` CORS-beállítása engedje a WebView
 origóját, hogy a natív `fetch`-es stream átmenjen. Cookie-t nem kell hozzá
 engedni, mert a hitelesítés fejléces tokennel történik. A stream-végpont
 hitelesítése változatlan.
+
+Emellett a stream route (`apps/api/src/routes/events.js`) a választ
+`reply.hijack()`-kel adja ki, ami megkerüli a `@fastify/cors` plugin normál
+`send()`/`onSend` folyamatát — az ott `reply.header(...)`-rel beállított
+`Access-Control-Allow-Origin` sosem jutna ki a socketre. A hijackolt válaszra
+tehát ugyanezt a CORS-fejlécet kézzel is ki kell írni, a plugin
+konfigurációjával megegyező döntés alapján.
 
 ## Ami ezzel eltűnik
 
