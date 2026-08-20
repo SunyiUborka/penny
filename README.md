@@ -287,12 +287,13 @@ meg.
       legsúlyosabb lehetséges hiba, mert csendes adatduplikációt jelentene.
 - [ ] **Végleges (nem becsült) árfolyam.** Az imént feltöltött EUR-os
       kiadás Mongo-dokumentumán (`docker compose exec mongo mongosh` vagy
-      hasonló) ellenőrizd a `rateFetchedAt` mezőt: a feltöltés időpontjához
-      közelinek kell lennie, nem a felvitel (repülő üzemmód alatti)
-      időpontjához — ez a mező a szerkesztő modalban nem jelenik meg
-      közvetlenül, csak az adatbázisban. Ez bizonyítja, hogy a
-      szinkron-motor ténylegesen újra lekérte az árfolyamot feltöltéskor,
-      nem a becsült értéket küldte el véglegesként.
+      hasonló) ellenőrizd a `rateFetchedAt` mezőt — ez a mező a szerkesztő
+      modalban nem jelenik meg közvetlenül, csak az adatbázisban. Sikeres,
+      ha az időbélyeg a repülő üzemmód **kikapcsolásának** (tehát a
+      feltöltés) időpontjához esik közel, néhány percen belül; hibás, ha a
+      **felvitel** (a repülő üzemmód bekapcsolása alatti) időpontjához esik
+      közel, vagy azzal egyezik — ez utóbbi azt jelentené, hogy a becsült
+      árfolyam ment fel véglegesként, nem a szinkron-motor kérte le újra.
 - [ ] **Elakadt tétel kezelése.** Idézz elő egy végleges szerver-elutasítást
       (pl. vegyél fel egy kiadást offline egy eseményhez, majd töröld azt az
       eseményt egy másik eszközről/böngészőből, mielőtt a feltöltés lefutna).

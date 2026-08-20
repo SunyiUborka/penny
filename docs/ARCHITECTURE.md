@@ -647,9 +647,14 @@ A `SettlementPanel` a betöltött kiadáslistából számol
 tartalmazza — ez ingyen működik offline, de azt is jelenti, hogy **a
 sorbanálló kiadások is beleszámítanak az egyenlegekbe**. Ez elsőre
 meglepő lehet, ha valaki a listát nézve nem veszi észre, hogy egy sor még
-`pending`; a panel ezért mindig kiír egy figyelmeztetést, ha van legalább
-egy fel nem töltött kiadás, és a devizás pending sorok forint-értékét `≈`
-jelöléssel mutatja.
+`pending`; a `SettlementPanel` ezért mindig kiír egy figyelmeztetést, ha van
+legalább egy fel nem töltött kiadás.
+
+A per-soros jelzés más komponens dolga: az `ExpenseTable.vue` a
+kiadáslistában minden `pending` sor forint-oszlopa elé `≈` előtagot tesz —
+**a pénznemtől függetlenül, a forintban rögzített pending soroknál is**,
+nem csak a devizásoknál. A `SettlementPanel` maga nem renderel
+kiadásonkénti sort, tehát nem is ő teszi ki ezt a jelölést.
 
 ### 10.5 Szinkron-motor
 
