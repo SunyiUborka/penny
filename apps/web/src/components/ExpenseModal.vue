@@ -4,11 +4,10 @@ import {
   convertMinorAmount,
   getCurrencyExponent,
   MAX_EXPENSE_MAJOR_AMOUNT,
-  rateResponseSchema,
   SETTLEMENT_CURRENCY,
   SUPPORTED_CURRENCIES,
 } from '@filler/shared';
-import { apiClient } from '../api/client.js';
+import { fetchRateWithCache } from '../offline/rates.js';
 import { toDateInputValue } from '../utils/format.js';
 
 const props = defineProps({
@@ -43,6 +42,7 @@ const sharedWithIds = ref([...props.event.participantIds]);
 
 const rateLoading = ref(false);
 const rateError = ref('');
+const rateEstimated = ref(false);
 const fieldErrors = ref({});
 
 let initialSnapshot = '';
@@ -145,13 +145,13 @@ async function fetchRate() {
   }
   rateLoading.value = true;
   rateError.value = '';
+  rateEstimated.value = false;
   try {
-    const result = await apiClient.get(`/rates?from=${currency.value}&to=${SETTLEMENT_CURRENCY}`, {
-      schema: rateResponseSchema,
-    });
+    const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY);
     exchangeRate.value = result.rate;
     rateFetchedAt.value = result.fetchedAt;
     rateSource.value = 'api';
+    rateEstimated.value = result.estimated;
   } catch {
     rateError.value = 'Nem sikerült lekérni az árfolyamot. Add meg kézzel.';
     rateSource.value = 'manual';
@@ -170,6 +170,7 @@ if (!isEditMode.value) {
 
 function handleRateInput() {
   rateSource.value = 'manual';
+  rateEstimated.value = false;
 }
 
 function toggleParticipant(personId) {
@@ -388,6 +389,10 @@ onUnmounted(() => {
                 {{ rateLoading ? 'Frissítés…' : 'Frissítés' }}
               </button>
             </div>
+            <p v-if="rateEstimated" class="expense-modal__rate-note">
+              ≈ Becsült árfolyam a legutóbb letöltött adatból. A végleges érték a kiadás
+              feltöltésekor dől el.
+            </p>
           </div>
           <div class="expense-modal__rate-error-slot">
             <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
@@ -574,5 +579,11 @@ onUnmounted(() => {
     font-size: 0.82rem;
     padding: 0.45em 0.8em;
   }
+}
+
+.expense-modal__rate-note {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
 }
 </style>
