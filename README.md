@@ -209,9 +209,11 @@ aktív, IndexedDB-re épül.
   állapotukban; a felület egy halk sávval jelzi, hogy „Offline — utoljára
   frissítve: …”.
 - Kiadás felvehető, módosítható, törölhető. A sorbanállított tétel a listában
-  „függőben” jelzéssel jelenik meg, és nem szerkeszthető, amíg fel nem
-  töltődött — a szerkesztés a szervertől kapott valódi kiadás-azonosítóra
-  támaszkodik, ami egy még függőben lévő sornak nincs.
+  „függőben” jelzéssel és a forint-oszlopában egy `≈` előtaggal jelenik meg
+  (ez minden pending sorra vonatkozik, a forintban rögzítettre is — a
+  végleges érték csak feltöltéskor dől el), és nem szerkeszthető, amíg fel
+  nem töltődött — a szerkesztés a szervertől kapott valódi
+  kiadás-azonosítóra támaszkodik, ami egy még függőben lévő sornak nincs.
 - Az Elszámolás fül offline is számol, mert a betöltött (és a még
   sorbanálló) kiadáslistából dolgozik — a fel nem töltött tételek **is**
   beleszámítanak az egyenlegekbe, a devizás sorok forint-értéke pedig a
@@ -229,9 +231,12 @@ duplikációt a kiadáshoz rendelt `clientId` mező zárja ki — a szerver ez
 alapján ismeri fel az ismételt kérést —, ezért egy megszakadt feltöltés
 újraküldése biztonságos.
 
-Devizás kiadásnál a felvitelkor (esetleg cache-elt, `≈` jelöléssel mutatott)
-árfolyam csak becslés: a forintra átváltott végleges érték mindig a
-**feltöltéskor** frissen lekért árfolyammal dől el.
+Devizás kiadás felvitelekor, ha van korábbi cache-elt árfolyam az adott
+devizapárra, azt használja az űrlap előnézete — „Becsült árfolyam” felirattal,
+ha ez a cache-elt érték nem a mai napról származik (ha egyáltalán nincs
+korábbi árfolyam, kézi megadást kér). Ez az érték mindig csak becslés: a
+forintra átváltott végleges összeg mindig a **feltöltéskor** frissen lekért
+árfolyammal dől el.
 
 Egy tétel csak akkor kerül elakadt („failed”) állapotba, ha a szerver
 véglegesen, magáról a tételről mond nemet (érvénytelen adat, törölt esemény,
@@ -261,11 +266,12 @@ meg.
       jön, a `apps/web/src/offline/cache.js` `fetchWithCache`-e vagy maga az
       IndexedDB-hozzáférés hibás, és az alábbi pontok nagy része értelmetlen.
 - [ ] **Offline írás és perzisztencia újraindítás után.** Még repülő
-      üzemmódban vegyél fel egy forintos és egy EUR-os kiadást, majd zárd be
-      teljesen az appot (ne csak háttérbe küldd), és indítsd újra — továbbra
-      is offline. Bizonyíték: mindkét sor „függőben” jelzéssel újra megjelenik
-      (az `outbox` IndexedDB store túlélte az újraindítást), az EUR-os sor
-      becsült árfolyammal (`≈`) számolt forint-értéket mutat, és egyik sor sem
+      üzemmódban vegyél fel egy forintos és egy EUR-os kiadást (ha nincs
+      korábbi cache-elt EUR→HUF árfolyam, az űrlap kézi árfolyam-megadást
+      kér — adj meg egyet), majd zárd be teljesen az appot (ne csak
+      háttérbe küldd), és indítsd újra — továbbra is offline. Bizonyíték:
+      mindkét sor „függőben” jelzéssel és `≈` előtaggal újra megjelenik (az
+      `outbox` IndexedDB store túlélte az újraindítást), és egyik sor sem
       nyitható szerkesztésre kattintással.
 - [ ] **Offline elszámolás.** Ugyanebben az állapotban nyisd meg az
       Elszámolás fület. Bizonyíték: az egyenlegek és az utalás-lista a két
@@ -280,12 +286,13 @@ meg.
       `expenseService.createExpense`) vagy a kliens `enqueue`-ja hibás — ez a
       legsúlyosabb lehetséges hiba, mert csendes adatduplikációt jelentene.
 - [ ] **Végleges (nem becsült) árfolyam.** Az imént feltöltött EUR-os
-      kiadáson ellenőrizd (böngészőből megnyitva a szerkesztő modalt, vagy a
-      Mongo adatbázisban) a `rateFetchedAt` értékét: a feltöltés
-      időpontjához közelinek kell lennie, nem a felvitel (repülő üzemmód
-      alatti) időpontjához. Ez bizonyítja, hogy a szinkron-motor ténylegesen
-      újra lekérte az árfolyamot feltöltéskor, nem a becsült értéket küldte
-      el véglegesként.
+      kiadás Mongo-dokumentumán (`docker compose exec mongo mongosh` vagy
+      hasonló) ellenőrizd a `rateFetchedAt` mezőt: a feltöltés időpontjához
+      közelinek kell lennie, nem a felvitel (repülő üzemmód alatti)
+      időpontjához — ez a mező a szerkesztő modalban nem jelenik meg
+      közvetlenül, csak az adatbázisban. Ez bizonyítja, hogy a
+      szinkron-motor ténylegesen újra lekérte az árfolyamot feltöltéskor,
+      nem a becsült értéket küldte el véglegesként.
 - [ ] **Elakadt tétel kezelése.** Idézz elő egy végleges szerver-elutasítást
       (pl. vegyél fel egy kiadást offline egy eseményhez, majd töröld azt az
       eseményt egy másik eszközről/böngészőből, mielőtt a feltöltés lefutna).
