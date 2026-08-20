@@ -144,6 +144,21 @@ export const useExpensesStore = defineStore('expenses', {
   }),
   actions: {
     /**
+     * Igaz, ha `eventId` a ténylegesen megnyitott esemény ebben a lapban —
+     * ugyanaz a nyilvántartás, amit a modul belül az elkésett válaszok
+     * kiszűrésére használ (lásd a modulszintű `isCurrentEvent`-et). Ez az
+     * egyetlen hivatalos forrás arra, hogy "melyik eseményt nézi éppen ez a
+     * lap" — külső hívók (pl. a szinkron-motor) ezt kérdezzék le, ne egy
+     * saját, a lista tartalmából kitalált közelítést vezessenek be
+     * (a `expenses` tömb ugyanis nem particionál eseményenként).
+     * @param {string} eventId
+     * @returns {boolean}
+     */
+    isViewingEvent(eventId) {
+      return isCurrentEvent(eventId);
+    },
+
+    /**
      * @param {string} eventId
      */
     async fetchExpenses(eventId) {

@@ -29,6 +29,29 @@ function isPayloadVerdict(error) {
 }
 
 /**
+ * Az árfolyam frissítése közben történt, a kiadás írásáról semmit nem
+ * mondó hiba (hálózathiba a `/rates` felé, vagy a válasza nem illik a
+ * sémára). Szándékosan külön típus, nem puszta továbbdobás: a `syncOutbox`
+ * osztályozója enélkül a kiváltó kivétel TÍPUSA alapján döntene — egy innen
+ * származó `ZodError`-t tévesen a KIADÁS-válasz kontraktus-töréseként
+ * kezelne, és véglegesen `failed`-be tenne egy olyan kiadást, amit még fel
+ * sem küldtünk. Ez a típus a hiba EREDETE alapján osztályoz, nem a
+ * TÍPUSA alapján — a `syncOutbox` ezt ugyanúgy retryable-nek veszi, mint
+ * egy sima hálózathibát. Ne egyszerűsítsük vissza puszta `throw error`-ra;
+ * az eredeti hiba a `cause`-ban megmarad diagnosztikai célra.
+ */
+class RateResolutionError extends Error {
+  /**
+   * @param {unknown} cause
+   */
+  constructor(cause) {
+    super('Az árfolyam frissítése nem sikerült.');
+    this.name = 'RateResolutionError';
+    this.cause = cause;
+  }
+}
+
+/**
  * A sorbanállított módosítások feltöltése, létrehozásuk sorrendjében.
  *
  * A `failed` állapotú elemeket nem próbáljuk újra automatikusan: ezek
@@ -54,6 +77,12 @@ export async function syncOutbox() {
       try {
         response = await uploadEntry(entry);
       } catch (error) {
+        if (error instanceof RateResolutionError) {
+          // Az árfolyam-lekérés hibázott — ez semmit nem mond a KIADÁS
+          // írásáról, hiszen az még meg sem történt. Ugyanúgy retryable,
+          // mint egy hálózathiba: az elem `pending` marad, itt megállunk.
+          break;
+        }
         if (error instanceof ApiError && !isPayloadVerdict(error)) {
           // A szerver válaszolt, de nem az elemről mond véleményt: a 401/403
           // azt jelenti, a munkamenet járt le (nem hogy ez a kiadás hibás),
@@ -121,27 +150,35 @@ export async function syncOutbox() {
  */
 function applyUploadResult(entry, response) {
   const store = useExpensesStore();
-  // A store egyetlen `expenses` tömböt tart, a jelenleg megnyitott esemény
-  // listáját — nem particionál eseményenként. Ha a szinkron épp egy másik
-  // (nem az itt látott) esemény sorbaállított elemét tölti fel, a válasz
-  // beszúrása tévedésből átkeverné egy teljesen más esemény kiadását a most
-  // látott listába. Ezért csak akkor nyúlunk a listához, ha a hozzá tartozó
-  // sor (a `create`-nél a szintetikus `pending:<uuid>`, a `update`-nél maga
-  // az eredeti kiadás-azonosító) valóban szerepel benne — különben ez a lap
-  // nem is ezt az eseményt mutatja, a store-nak nincs itt dolga.
-  if (entry.type === 'create') {
-    const syntheticId = `pending:${entry.id}`;
-    if (store.expenses.some((expense) => expense.id === syntheticId)) {
-      // A store `upsertExpense`-e az `id` alapján dolgozik, a szerver
-      // viszont saját azonosítót ad a létrehozott kiadásnak — emiatt ez
-      // sosem cserélné le a szintetikus sort, a felhasználó duplán látná a
-      // kiadást. A valódi sort a szerver válaszából szúrjuk be, a
-      // szintetikusat pedig itt távolítjuk el.
-      store.upsertExpense(response);
-    }
-    store.removeExpense(syntheticId);
+  // A store egyetlen `expenses` tömböt tart, mindig a ténylegesen megnyitott
+  // esemény listáját — nem particionál eseményenként. Ha a szinkron épp egy
+  // másik (nem az itt látott) esemény sorbaállított elemét tölti fel, a
+  // válasz beszúrása tévedésből átkeverné egy teljesen más esemény kiadását
+  // a most látott listába. A store már nyilvántartja, melyik eseményt nézi
+  // éppen ez a lap — ezt kérdezzük le az `isViewingEvent` accessoron, nem
+  // egy saját, a lista tartalmából (pl. "benne van-e már a szintetikus sor")
+  // kitalált közelítést vezetünk be: két párhuzamos nyilvántartás ugyanarról
+  // csak széttartana (lásd a Task 5 tanulságait).
+  if (!store.isViewingEvent(entry.eventId)) {
+    // Ez a lap nem ezt az eseményt mutatja — a store-nak nincs itt dolga. Ha
+    // create volt, a szintetikus `pending:<uuid>` sor eltávolítása is
+    // felesleges: ebben a store-példányban soha nem is jött létre.
+    return;
   }
-  if (entry.type === 'update' && store.expenses.some((expense) => expense.id === entry.expenseId)) {
+  if (entry.type === 'create') {
+    // A store `upsertExpense`-e az `id` alapján dolgozik, a szerver viszont
+    // saját azonosítót ad a létrehozott kiadásnak — emiatt ez sosem
+    // cserélné le a szintetikus sort, a felhasználó duplán látná a
+    // kiadást. A valódi sort a szerver válaszából szúrjuk be, a
+    // szintetikusat pedig itt távolítjuk el. Ez akkor is lefut, ha ez a lap
+    // csak MÁSIK tabként nézi ugyanezt az eseményt (nem ő állította sorba a
+    // létrehozást) — a szintetikus sor eltávolítása ilyenkor ártalmatlan
+    // no-op, a valódi sor beszúrása viszont pont ezt a lapot is megkíméli a
+    // 30 másodpercig is elhúzódó SSE-visszhangra várástól.
+    store.upsertExpense(response);
+    store.removeExpense(`pending:${entry.id}`);
+  }
+  if (entry.type === 'update') {
     // Ugyanez a `pending` jelző eltüntetésére: a szerkesztés a meglévő sort
     // helyben jelölte `pending: true`-ra (lásd `toPendingUpdate`), a szerver
     // válasza pedig ezt a jelzőt is lecseréli.
@@ -209,9 +246,12 @@ async function withFreshRate(payload) {
     // nem végleges — nem szabad csendben ráfogni a becslésre, hogy az a
     // végleges érték. Az elemnek `pending`-en kell maradnia, hogy a
     // következő (remélhetőleg sikeres) próbálkozáskor valódi árfolyammal
-    // menjen fel — ezért ezt továbbdobjuk, az `uploadEntry` és rajta
-    // keresztül a `syncOutbox` hívója dönt a besorolásról.
-    throw error;
+    // menjen fel. A `RateResolutionError`-ba csomagolva dobjuk tovább, nem
+    // nyersen: a `syncOutbox` osztályozója különben a kiváltó kivétel
+    // TÍPUSA (pl. egy itteni `ZodError`) alapján tévesen a KIADÁS-válasz
+    // kontraktus-töréseként kezelné, és véglegesen `failed`-be tenne egy
+    // olyan kiadást, amit még fel sem küldtünk.
+    throw new RateResolutionError(error);
   }
 }
 
