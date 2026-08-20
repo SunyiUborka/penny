@@ -57,9 +57,11 @@ async function request(method, path, options = {}) {
     // Előbb jelöljük hitelesítetlennek a store-t, csak utána navigálunk —
     // különben a router guard "authenticated: true" mellett azonnal
     // visszadobná ide a felhasználót, végtelen kérés-hurkot okozva (lásd a
-    // review 1. pontját).
-    authStore.authenticated = false;
-    authStore.checked = true;
+    // review 1. pontját). A store `markUnauthenticated`-je ugyanezt teszi,
+    // és emellett törli a „volt már itt sikeres hitelesítés" jelzőt is
+    // (`offline/session.js`) — enélkül egy visszavont munkamenet után a
+    // következő offline hidegindulás provizórikusan újra beengedne.
+    await authStore.markUnauthenticated();
     const redirect = router.currentRoute.value.fullPath;
     if (router.currentRoute.value.name !== 'login') {
       router.push({ name: 'login', query: { redirect } });
