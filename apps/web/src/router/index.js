@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import EventsListView from '../views/EventsListView.vue';
 import EventDetailView from '../views/EventDetailView.vue';
 import SettingsView from '../views/SettingsView.vue';
+import SyncView from '../views/SyncView.vue';
 import LoginView from '../views/LoginView.vue';
 import { useAuthStore } from '../stores/auth.js';
 
@@ -17,6 +18,7 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     { path: '/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true } },
+    { path: '/sync', name: 'sync', component: SyncView, meta: { requiresAuth: true } },
   ],
 });
 
