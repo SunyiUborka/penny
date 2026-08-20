@@ -74,6 +74,15 @@ const hasNothingToSettle = computed(() => {
 });
 
 /**
+ * Igaz, ha a listában van olyan kiadás, ami még nincs feltöltve — ilyenkor az
+ * elszámolás is ezt tartalmazza, és a devizás összegek csak a felvitelkori
+ * (esetleg becsült) árfolyammal számoltak.
+ */
+const hasPendingExpense = computed(() => {
+  return expensesStore.expenses.some((expense) => expense.pending === true);
+});
+
+/**
  * A megosztható összefoglaló: ki kinek mennyit fizet. Egyszerű szöveg, hogy
  * bármelyik célalkalmazásban olvasható maradjon.
  * @returns {string}
@@ -154,6 +163,10 @@ async function handleShare() {
       </div>
 
       <template v-else>
+        <p v-if="hasPendingExpense" class="settlement__status">
+          Az elszámolás még fel nem töltött kiadást is tartalmaz. A devizás összegek a felvitelkori
+          árfolyammal becsültek — a végleges érték a feltöltéskor dől el.
+        </p>
         <span class="eyebrow settlement__transfers-label">Ki fizet kinek</span>
         <ul class="settlement__transfers">
           <li

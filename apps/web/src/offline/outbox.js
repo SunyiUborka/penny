@@ -1,0 +1,93 @@
+import { getDb, OUTBOX_STORE } from './db.js';
+import { useOfflineStore } from '../stores/offline.js';
+
+/**
+ * Sorbanállított kiadás-módosítás felvétele.
+ * @param {{ type: 'create'|'update'|'delete', eventId: string, expenseId?: string, clientId?: string, payload?: object }} entry
+ * @returns {Promise<object>}
+ */
+export async function enqueue(entry) {
+  const db = await getDb();
+  const row = {
+    id: crypto.randomUUID(),
+    type: entry.type,
+    eventId: entry.eventId,
+    expenseId: entry.expenseId ?? null,
+    clientId: entry.clientId ?? null,
+    payload: entry.payload ?? null,
+    status: 'pending',
+    error: null,
+    createdAt: new Date(),
+  };
+  await db.put(OUTBOX_STORE, row);
+  await refreshCounts();
+  return row;
+}
+
+/** @returns {Promise<object[]>} */
+export async function listEntries() {
+  const db = await getDb();
+  const rows = await db.getAll(OUTBOX_STORE);
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/**
+ * @param {string} eventId
+ * @returns {Promise<object[]>}
+ */
+export async function listByEvent(eventId) {
+  const rows = await listEntries();
+  return rows.filter((row) => row.eventId === eventId);
+}
+
+/**
+ * @param {string} id
+ * @param {string} message
+ * @returns {Promise<void>}
+ */
+export async function markFailed(id, message) {
+  await updateStatus(id, 'failed', message);
+}
+
+/**
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function markPending(id) {
+  await updateStatus(id, 'pending', null);
+}
+
+/**
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export async function removeEntry(id) {
+  const db = await getDb();
+  await db.delete(OUTBOX_STORE, id);
+  await refreshCounts();
+}
+
+/** @returns {Promise<void>} */
+export async function refreshCounts() {
+  const rows = await listEntries();
+  useOfflineStore().setCounts({
+    pending: rows.filter((row) => row.status === 'pending').length,
+    failed: rows.filter((row) => row.status === 'failed').length,
+  });
+}
+
+/**
+ * @param {string} id
+ * @param {'pending'|'failed'} status
+ * @param {string | null} message
+ * @returns {Promise<void>}
+ */
+async function updateStatus(id, status, message) {
+  const db = await getDb();
+  const row = await db.get(OUTBOX_STORE, id);
+  if (!row) {
+    return;
+  }
+  await db.put(OUTBOX_STORE, { ...row, status, error: message });
+  await refreshCounts();
+}

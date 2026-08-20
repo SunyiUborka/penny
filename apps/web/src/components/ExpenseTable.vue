@@ -146,13 +146,19 @@ async function handleDelete(expense) {
           v-for="expense in filteredExpenses"
           :key="expense.id"
           class="expense-table__row"
-          :class="{ 'is-fresh': expensesStore.freshIds.has(expense.id) }"
+          :class="{
+            'is-fresh': expensesStore.freshIds.has(expense.id),
+            'is-pending': expense.pending,
+          }"
           tabindex="0"
           @click="openEditModal(expense)"
           @keydown.enter="openEditModal(expense)"
         >
           <td data-label="Dátum" class="money">{{ formatDate(expense.date) }}</td>
-          <td data-label="Leírás" class="expense-table__description">{{ expense.description }}</td>
+          <td data-label="Leírás" class="expense-table__description">
+            {{ expense.description }}
+            <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
+          </td>
           <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
           <td data-label="Összeg" class="align-right money">
             {{ formatMoney({ amountMinor: expense.amountMinor, currency: expense.currency }) }}
@@ -165,7 +171,7 @@ async function handleDelete(expense) {
           <td data-label="Osztozók" class="expense-table__shared">
             {{ expense.sharedWithIds.map(participantName).join(', ') }}
           </td>
-          <td data-label="">
+          <td v-if="!expense.pending" data-label="">
             <button
               type="button"
               class="btn btn--danger btn--small"
@@ -268,6 +274,17 @@ async function handleDelete(expense) {
 
 .expense-table__description {
   font-weight: 600;
+}
+
+.expense-table__pending-badge {
+  margin-left: var(--space-1);
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--brass);
+  color: var(--paper);
 }
 
 .expense-table__shared {

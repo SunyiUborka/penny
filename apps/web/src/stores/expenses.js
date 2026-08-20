@@ -1,12 +1,15 @@
 import { defineStore } from 'pinia';
 import {
+  convertMinorAmount,
   expenseListResponseSchema,
   expenseResponseSchema,
   expenseStreamMessageSchema,
+  SETTLEMENT_CURRENCY,
 } from '@filler/shared';
-import { apiClient } from '../api/client.js';
+import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
 import { fetchWithCache } from '../offline/cache.js';
+import { enqueue, listByEvent } from '../offline/outbox.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -45,6 +48,40 @@ function compareExpenses(a, b) {
 function insertIndexFor(expenses, expense) {
   const index = expenses.findIndex((item) => compareExpenses(item, expense) > 0);
   return index === -1 ? expenses.length : index;
+}
+
+/**
+ * A sorbanállított kiadás listában megjelenítendő alakja. Az `id` prefixe
+ * megkülönbözteti a szervertől kapott kiadásoktól, a `pending` jelzőt pedig a
+ * felület használja.
+ * @param {object} entry outbox bejegyzés
+ * @returns {object}
+ */
+function toPendingExpense(entry) {
+  const { amountMinor, currency, exchangeRate } = entry.payload;
+  return {
+    ...entry.payload,
+    id: `pending:${entry.id}`,
+    eventId: entry.eventId,
+    date: new Date(entry.payload.date),
+    // Ugyanaz a számítás, amit a szerver `buildExpenseData`-ja végez — csak
+    // (deviza esetén) a felvitelkor ismert, esetleg cache-elt árfolyammal.
+    // NE a nyers `amountMinor` kerüljön ide: az elszámolás ebből a listából
+    // számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná el az
+    // egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől el.
+    baseAmountMinor:
+      currency === SETTLEMENT_CURRENCY
+        ? amountMinor
+        : convertMinorAmount({
+            amountMinor,
+            rate: exchangeRate,
+            sourceCurrency: currency,
+            targetCurrency: SETTLEMENT_CURRENCY,
+          }),
+    createdAt: entry.createdAt,
+    updatedAt: entry.createdAt,
+    pending: true,
+  };
 }
 
 export const useExpensesStore = defineStore('expenses', {
@@ -87,6 +124,23 @@ export const useExpensesStore = defineStore('expenses', {
       } finally {
         if (latestFetchEventId === eventId) {
           this.loading = false;
+        }
+      }
+    },
+
+    /**
+     * Az app újraindítása után a sorbanállított kiadásoknak is látszaniuk kell
+     * a listában, nem csak a szinkron képernyőn.
+     * @param {string} eventId
+     */
+    async loadPending(eventId) {
+      const entries = await listByEvent(eventId);
+      for (const entry of entries) {
+        if (entry.type === 'create') {
+          this.upsertExpense(toPendingExpense(entry));
+        }
+        if (entry.type === 'delete' && entry.expenseId) {
+          this.removeExpense(entry.expenseId);
         }
       }
     },
@@ -263,13 +317,24 @@ export const useExpensesStore = defineStore('expenses', {
      * @param {object} input
      */
     async createExpense(eventId, input) {
-      const expense = await apiClient.post(`/events/${eventId}/expenses`, input, {
-        schema: expenseResponseSchema,
-      });
-      // Optimista beszúrás: ha épp nincs élő kapcsolat, a saját felvitt kiadás
-      // akkor is azonnal látszódjon.
-      this.upsertExpense(expense);
-      return expense;
+      const clientId = crypto.randomUUID();
+      const body = { ...input, clientId };
+      try {
+        const expense = await apiClient.post(`/events/${eventId}/expenses`, body, {
+          schema: expenseResponseSchema,
+        });
+        this.upsertExpense(expense);
+        return expense;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          // A szerver válaszolt (validációs hiba, 404): ezt a felhasználónak
+          // most kell megoldania, nem sorbanállítással.
+          throw error;
+        }
+        const entry = await enqueue({ type: 'create', eventId, clientId, payload: body });
+        this.upsertExpense(toPendingExpense(entry));
+        return null;
+      }
     },
 
     /**
@@ -277,19 +342,47 @@ export const useExpensesStore = defineStore('expenses', {
      * @param {object} input
      */
     async updateExpense(id, input) {
-      const updated = await apiClient.patch(`/expenses/${id}`, input, {
-        schema: expenseResponseSchema,
-      });
-      this.upsertExpense(updated);
-      return updated;
+      try {
+        const updated = await apiClient.patch(`/expenses/${id}`, input, {
+          schema: expenseResponseSchema,
+        });
+        this.upsertExpense(updated);
+        return updated;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        const existing = this.expenses.find((expense) => expense.id === id);
+        await enqueue({
+          type: 'update',
+          eventId: existing?.eventId ?? '',
+          expenseId: id,
+          payload: input,
+        });
+        if (existing) {
+          // A `date` az űrlapról ÉÉÉÉ-HH-NN string, a listában viszont Date —
+          // a rendezés (compareExpenses) getTime()-ot hív rá.
+          this.upsertExpense({ ...existing, ...input, date: new Date(input.date), pending: true });
+        }
+        return null;
+      }
     },
 
     /**
      * @param {string} id
      */
     async deleteExpense(id) {
-      await apiClient.delete(`/expenses/${id}`);
-      this.removeExpense(id);
+      const existing = this.expenses.find((expense) => expense.id === id);
+      try {
+        await apiClient.delete(`/expenses/${id}`);
+        this.removeExpense(id);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        await enqueue({ type: 'delete', eventId: existing?.eventId ?? '', expenseId: id });
+        this.removeExpense(id);
+      }
     },
   },
 });
