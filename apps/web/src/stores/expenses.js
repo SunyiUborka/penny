@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { ZodError } from 'zod';
 import {
   convertMinorAmount,
   expenseListResponseSchema,
@@ -9,7 +10,7 @@ import {
 import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
 import { fetchWithCache } from '../offline/cache.js';
-import { enqueue, listByEvent } from '../offline/outbox.js';
+import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -186,6 +187,10 @@ export const useExpensesStore = defineStore('expenses', {
           this.removeExpense(entry.expenseId);
         }
       }
+      // Az app újraindítása után az outbox számlálói (pending/failed) nulláról
+      // indulnának a következő sorbaállításig — enélkül a szinkron képernyő
+      // (következő feladat) egy elavult, hamis nulla-állapotot örökölne.
+      await refreshCounts();
     },
 
     /**
@@ -195,6 +200,14 @@ export const useExpensesStore = defineStore('expenses', {
      *
      * Ez a művelet pótolja a szakadás alatt elmaradt üzeneteket — ezért nincs
      * szerveroldali Last-Event-ID puffer.
+     *
+     * A kapcsolat pontosan akkor tér vissza, amikor ez lefut (stream
+     * újrakapcsolódás, fül előtérbe kerülése, lehúzásos frissítés) — ha csak a
+     * szerver listáját tennénk be, egy sorbaálló létrehozás/törlés/szerkesztés
+     * sora eltűnne/visszaállna a képernyőn, miközben az outbox (és a pending
+     * számláló) még mindig tartalmazza. A `loadPending` visszajátszása ezért
+     * ugyanúgy idetartozik ide, mint az `EventDetailView` `fetchExpenses`-t
+     * követő láncába.
      * @param {string} eventId
      */
     async refreshQuietly(eventId) {
@@ -205,6 +218,7 @@ export const useExpensesStore = defineStore('expenses', {
         // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
         // sikeres csendes frissítés a bizonyíték, hogy a kapcsolat helyreállt.
         this.error = null;
+        await this.loadPending(eventId);
       } catch {
         // Csendben bukik is: a látható (elavult) lista többet ér egy
         // hibaüzenetnél, és a következő újratöltés helyrehozza.
@@ -369,9 +383,12 @@ export const useExpensesStore = defineStore('expenses', {
         this.upsertExpense(expense);
         return expense;
       } catch (error) {
-        if (error instanceof ApiError) {
-          // A szerver válaszolt (validációs hiba, 404): ezt a felhasználónak
-          // most kell megoldania, nem sorbanállítással.
+        if (error instanceof ApiError || error instanceof ZodError) {
+          // A szerver válaszolt (validációs hiba, 404), vagy 2xx-et adott,
+          // amit nem tudunk a várt sémaként értelmezni: egyik sem
+          // hálózathiba, ezt a felhasználónak most kell megoldania, nem
+          // sorbanállítással — egy ténylegesen sikerült írást így sem
+          // állítanánk sorba még egyszer.
           throw error;
         }
         const entry = await enqueue({ type: 'create', eventId, clientId, payload: body });
@@ -392,19 +409,24 @@ export const useExpensesStore = defineStore('expenses', {
         this.upsertExpense(updated);
         return updated;
       } catch (error) {
-        if (error instanceof ApiError) {
+        if (error instanceof ApiError || error instanceof ZodError) {
           throw error;
         }
         const existing = this.expenses.find((expense) => expense.id === id);
+        if (!existing) {
+          // Nincs ismert eseményazonosító, amire a bejegyzést rá tudnánk
+          // kötni: a `listByEvent` sosem találná meg, a feltöltő sosem tudná
+          // hova irányítani. Inkább hibát mutatunk, mint hogy egy ilyen,
+          // soha nem szinkronizálódó bejegyzésben veszne el a módosítás.
+          throw error;
+        }
         await enqueue({
           type: 'update',
-          eventId: existing?.eventId ?? '',
+          eventId: existing.eventId,
           expenseId: id,
           payload: input,
         });
-        if (existing) {
-          this.upsertExpense(toPendingUpdate(existing, input));
-        }
+        this.upsertExpense(toPendingUpdate(existing, input));
         return null;
       }
     },
@@ -418,10 +440,16 @@ export const useExpensesStore = defineStore('expenses', {
         await apiClient.delete(`/expenses/${id}`);
         this.removeExpense(id);
       } catch (error) {
-        if (error instanceof ApiError) {
+        if (error instanceof ApiError || error instanceof ZodError) {
           throw error;
         }
-        await enqueue({ type: 'delete', eventId: existing?.eventId ?? '', expenseId: id });
+        if (!existing) {
+          // Ugyanaz az elv, mint a szerkesztésnél: ismert eseményazonosító
+          // nélkül a bejegyzés soha nem szinkronizálódna — inkább hibát
+          // mutatunk.
+          throw error;
+        }
+        await enqueue({ type: 'delete', eventId: existing.eventId, expenseId: id });
         this.removeExpense(id);
       }
     },
