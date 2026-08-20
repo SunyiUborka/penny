@@ -27,6 +27,13 @@ export function getDb() {
           outbox.createIndex('status', 'status');
         }
       },
+    }).catch((error) => {
+      // Egy elutasított promise is truthy: ha bent hagynánk a cache-ben, egy
+      // elsőre bukott megnyitás (privát böngészés, letiltott tárolás) után az
+      // offline réteg soha nem állna helyre. Nullázzuk, hogy a következő hívás
+      // újra megpróbálhassa.
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;
