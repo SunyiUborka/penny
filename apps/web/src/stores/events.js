@@ -30,6 +30,9 @@ export const useEventsStore = defineStore('events', {
     async refreshQuietly() {
       try {
         this.events = await apiClient.get('/events', { schema: eventListResponseSchema });
+        // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
+        // sikeres csendes frissítés a bizonyíték, hogy a kapcsolat helyreállt.
+        this.error = null;
       } catch {
         // Csendben bukik is: a látható (elavult) lista többet ér egy
         // hibaüzenetnél, és a következő frissítés helyrehozza.
