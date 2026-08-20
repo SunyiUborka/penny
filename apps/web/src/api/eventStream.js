@@ -86,18 +86,50 @@ function openWithEventSource(url, options) {
  * @returns {() => void}
  */
 function openWithFetch(url, options) {
-  const state = { closed: false, controller: null };
+  const state = { closed: false, controller: null, retryTimer: null };
 
-  runFetchStream(url, options, state).catch((error) => {
+  // A lezárás (`state.closed = true`) szinkron, de a ciklus nem: ha a
+  // `close()` épp akkor fut le, amikor egy `await webFetch(...)` vagy
+  // `reader.read()` már felbontott ígéretére vár a kód, a végrehajtás a
+  // lezárás UTÁN folytatódna, és `onOpen`/`onMessage` egy már nem
+  // érvényes feliratkozásra futna le (pl. egy közben megnyílt új
+  // feliratkozás store-állapotát rontaná el). Ezért minden callback egy
+  // közös ponton, itt van őrizve — nem szórtan a ciklus belsejében.
+  const guardedOptions = {
+    onOpen: () => {
+      if (!state.closed) {
+        options.onOpen();
+      }
+    },
+    onMessage: (data) => {
+      if (!state.closed) {
+        options.onMessage(data);
+      }
+    },
+    onClose: () => {
+      if (!state.closed) {
+        options.onClose();
+      }
+    },
+  };
+
+  runFetchStream(url, guardedOptions, state).catch((error) => {
     // Ide csak váratlan hiba jut: a hálózati hibákat a ciklus maga kezeli.
     console.error('Az élő frissítés streamje leállt:', error);
-    options.onClose();
+    guardedOptions.onClose();
   });
 
   return () => {
     state.closed = true;
     if (state.controller) {
       state.controller.abort();
+    }
+    if (state.retryTimer) {
+      // A folyamatban lévő újrapróbálkozási várakozást is törölni kell,
+      // különben a lezárt stream másodpercekkel később egy semmit nem érő
+      // újracsatlakozási kísérlettel „ébredne fel”.
+      clearTimeout(state.retryTimer);
+      state.retryTimer = null;
     }
   };
 }
@@ -107,7 +139,7 @@ function openWithFetch(url, options) {
  * leállt szerver ne kapjon másodpercenkénti kéréseket.
  * @param {string} url
  * @param {object} options
- * @param {{ closed: boolean, controller: AbortController | null }} state
+ * @param {{ closed: boolean, controller: AbortController | null, retryTimer: ReturnType<typeof setTimeout> | null }} state
  * @returns {Promise<void>}
  */
 async function runFetchStream(url, options, state) {
@@ -134,7 +166,7 @@ async function runFetchStream(url, options, state) {
     }
 
     state.controller = new AbortController();
-    let authFailed = false;
+    let terminal = false;
 
     try {
       const response = await webFetch(url, {
@@ -147,8 +179,16 @@ async function runFetchStream(url, options, state) {
         // örökké próbálkozni értelmetlen, és ez az út megkerüli az
         // apiClient meglévő 401-kezelését is (nem az `apiClient`-en megy
         // át). A következő bejelentkezés úgyis új feliratkozást nyit.
-        authFailed = true;
+        terminal = true;
         throw new Error(`Hitelesítés elutasítva: ${response.status}`);
+      }
+
+      if (response.status === 404) {
+        // Törölt esemény: a stream soha nem fog megnyílni, amíg ez a nézet
+        // nyitva van. Enélkül a ciklus 30 másodpercenként újra lekérné,
+        // amíg valaki be nem zárja a nézetet.
+        terminal = true;
+        throw new Error(`Az esemény nem található: ${response.status}`);
       }
 
       if (!response.ok || !response.body) {
@@ -173,20 +213,13 @@ async function runFetchStream(url, options, state) {
       // hitelesítési hibánál, ld. lent).
     }
 
-    if (state.closed) {
-      // A leiratkozás szinkron: ha idáig eljutottunk, a hívó már nem vár
-      // onClose-t erre a (lezárt) feliratkozásra — egy közben megnyílt új
-      // feliratkozás állapotát rontaná el.
-      return;
-    }
-
     options.onClose();
 
-    if (authFailed) {
+    if (terminal) {
       return;
     }
 
-    await delay(Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS));
+    await delay(Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS), state);
     attempt += 1;
   }
 }
@@ -203,7 +236,7 @@ async function runFetchStream(url, options, state) {
  * észre) a meglévő újrakapcsolódási út feldolgozza.
  * @param {ReadableStream} body
  * @param {(data: string) => void} onMessage
- * @param {{ closed: boolean, controller: AbortController | null }} state
+ * @param {{ closed: boolean, controller: AbortController | null, retryTimer: ReturnType<typeof setTimeout> | null }} state
  * @returns {Promise<void>}
  */
 async function readStreamBody(body, onMessage, state) {
@@ -266,10 +299,15 @@ function dataFromBlock(block) {
 
 /**
  * @param {number} ms
+ * @param {{ retryTimer: ReturnType<typeof setTimeout> | null }} state a
+ * timer azonosítóját itt tároljuk, hogy a closer törölni tudja
  * @returns {Promise<void>}
  */
-function delay(ms) {
+function delay(ms, state) {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    state.retryTimer = setTimeout(() => {
+      state.retryTimer = null;
+      resolve();
+    }, ms);
   });
 }
