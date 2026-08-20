@@ -23,12 +23,26 @@ let visibilityHandler = null;
 const freshTimers = new Map();
 
 /**
- * A legutóbb kért esemény azonosítója a `fetchExpenses`-hez. Egy nagyon
- * gyors, egymást követő navigáció esetén a korábbi kérés válasza később is
- * megérkezhet, mint a következőé — enélkül az a lista beleírna egy másik
- * esemény nézetébe.
+ * A legutóbb kért esemény azonosítója. A `fetchExpenses` állítja be minden
+ * hívásakor — ez az egyetlen hely, ami a „jelenleg látott esemény”-t
+ * deklarálja. Egy nagyon gyors, egymást követő navigáció esetén a korábbi
+ * kérés válasza később is megérkezhet, mint a következőé — enélkül az a
+ * lista beleírna egy másik esemény nézetébe. A `refreshQuietly` is ezt
+ * olvassa (lásd `isCurrentEvent`), hogy egy elkésett csendes frissítés se
+ * írhassa felül, sem játszhassa vissza az outbox-ot egy már elhagyott
+ * esemény nézetében.
  */
 let latestFetchEventId = null;
+
+/**
+ * Igaz, ha `eventId` még mindig a ténylegesen látott esemény — tehát egy rá
+ * vonatkozó, korábban elindított kérés válasza nem elkésett.
+ * @param {string} eventId
+ * @returns {boolean}
+ */
+function isCurrentEvent(eventId) {
+  return latestFetchEventId === eventId;
+}
 
 /**
  * A szerverrel azonos rendezés: dátum szerint csökkenő, egyező dátumon a
@@ -208,16 +222,36 @@ export const useExpensesStore = defineStore('expenses', {
      * számláló) még mindig tartalmazza. A `loadPending` visszajátszása ezért
      * ugyanúgy idetartozik ide, mint az `EventDetailView` `fetchExpenses`-t
      * követő láncába.
+     *
+     * A hívó (stream, `visibilitychange`, lehúzásos frissítés) egy adott
+     * eseményhez van kötve az indításkor — ha a felhasználó időközben másik
+     * eseményre navigál, mire ez a kérés visszaér, se a lista felülírása, se
+     * az outbox visszajátszása nem történhet meg: az `isCurrentEvent`
+     * ellenőrzés (a `fetchExpenses` mintájára) mindkét lépés előtt kizárja
+     * ezt, nem csak a lista beírása előtt.
      * @param {string} eventId
      */
     async refreshQuietly(eventId) {
       try {
-        this.expenses = await apiClient.get(`/events/${eventId}/expenses`, {
+        const expenses = await apiClient.get(`/events/${eventId}/expenses`, {
           schema: expenseListResponseSchema,
         });
+        if (!isCurrentEvent(eventId)) {
+          // Közben másik eseményre navigáltunk (ugyanaz a helyzet, mint a
+          // `fetchExpenses`-nél): ez a válasz elkésett, nem írhatja felül,
+          // ami épp látszik.
+          return;
+        }
+        this.expenses = expenses;
         // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
         // sikeres csendes frissítés a bizonyíték, hogy a kapcsolat helyreállt.
         this.error = null;
+        if (!isCurrentEvent(eventId)) {
+          // Ugyanaz az ellenőrzés a visszajátszás előtt is: a `loadPending`
+          // se játszhassa vissza egy már elhagyott esemény outbox-bejegyzéseit
+          // a jelenlegi (más eseményhez tartozó) nézetbe.
+          return;
+        }
         await this.loadPending(eventId);
       } catch {
         // Csendben bukik is: a látható (elavult) lista többet ér egy
