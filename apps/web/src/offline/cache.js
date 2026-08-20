@@ -58,7 +58,7 @@ export async function fetchWithCache(options) {
       // nem a lekérés bukott el.
       console.error('Nem sikerült a választ a cache-be írni:', writeError);
     }
-    offlineStore.setFresh(fetchedAt);
+    offlineStore.setFresh(key, fetchedAt);
     return { value, stale: false, fetchedAt };
   } catch (error) {
     if (error instanceof ApiError) {
@@ -68,7 +68,7 @@ export async function fetchWithCache(options) {
     if (!cached) {
       throw error;
     }
-    offlineStore.setStale(cached.fetchedAt);
+    offlineStore.setStale(key, cached.fetchedAt);
     return { value: cached.value, stale: true, fetchedAt: cached.fetchedAt };
   }
 }
