@@ -40,8 +40,10 @@ export async function buildApp(env) {
   await app.register(cookie, { secret: env.SESSION_SECRET });
   // `origin: false` helyett szűk lista: a böngészős kérések same-origin
   // mennek (nekik nem kell CORS), a natív app streamje viszont a WebView
-  // origójáról érkezik. A hitelesítés ott fejléces tokennel történik.
-  await app.register(cors, { origin: NATIVE_APP_ORIGINS, credentials: true });
+  // origójáról érkezik. A hitelesítés ott fejléces tokennel történik, nem
+  // cookie-val — a natív kérés nem küld `credentials` opciót, tehát nincs
+  // szükség `Access-Control-Allow-Credentials`-re, és nem is adunk ilyet.
+  await app.register(cors, { origin: NATIVE_APP_ORIGINS });
   await app.register(rateLimit, { global: false });
 
   await app.register(mongoPlugin, { mongoUrl: env.MONGO_URL });

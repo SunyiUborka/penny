@@ -14,7 +14,7 @@ import * as expenseService from '../services/expenseService.js';
 import * as settlementService from '../services/settlementService.js';
 import { subscribeToExpenseChanges } from '../services/eventBus.js';
 import { idParamsSchema } from '../schemas/params.js';
-import { NATIVE_APP_ORIGINS } from '../config/cors.js';
+import { corsHeadersFor } from '../config/cors.js';
 
 /** Heartbeat-ütem: a web/server.js proxyja a néma streamet elvágná. */
 const HEARTBEAT_MS = 20_000;
@@ -110,21 +110,18 @@ export default function eventsRoutes(fastify) {
       // Ha egyszer bufferelő reverse proxy kerül elénk: SSE-nél a válasz
       // pufferelése teljesen megfogja a streamet.
       'X-Accel-Buffering': 'no',
+      // A @fastify/cors a fejléceket reply.header(...)-rel csak "eltárolja" —
+      // azok a normál send()/onSend folyamatban kerülnek ki a socketre. A
+      // hijack() pontosan ezt a folyamatot kerüli meg, tehát a plugin által
+      // beállított Access-Control-Allow-Origin sosem jutna ki innen: a natív
+      // app kérése cross-origin (a WebView origója https://localhost, az API
+      // egy távoli abszolút URL), a válasz fejléc nélkül a WebView elutasítja.
+      // Ezért itt KÉZZEL pótoljuk, amit a plugin tenne — a döntést (mely
+      // origin engedélyezett, milyen fejlécekkel) a `corsHeadersFor()` hozza
+      // meg, ugyanabból a listából, amit az app.js plugin-regisztrációja is
+      // használ, hogy a két hely ne tudjon szétcsúszni.
+      ...corsHeadersFor(request.headers.origin),
     };
-
-    // A @fastify/cors a fejléceket reply.header(...)-rel csak "eltárolja" —
-    // azok a normál send()/onSend folyamatban kerülnek ki a socketre. A
-    // hijack() pontosan ezt a folyamatot kerüli meg, tehát a plugin által
-    // beállított Access-Control-Allow-Origin sosem jutna ki innen: a natív
-    // app kérése cross-origin (a WebView origója https://localhost, az API
-    // egy távoli abszolút URL), a válasz fejléc nélkül a WebView elutasítja.
-    // Ezért itt KÉZZEL pótoljuk, amit a plugin tenne — ne vond össze ezt a
-    // globális CORS middleware-rel, azon a hijackolt válasz nem megy át.
-    const origin = request.headers.origin;
-    if (origin && NATIVE_APP_ORIGINS.includes(origin)) {
-      headers['Access-Control-Allow-Origin'] = origin;
-      headers['Access-Control-Allow-Credentials'] = 'true';
-    }
 
     reply.hijack();
     reply.raw.writeHead(200, headers);
