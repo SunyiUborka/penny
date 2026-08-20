@@ -550,8 +550,9 @@ Pinia store-ok és az `apiClient` között — a böngészőben és az APK-ban
 egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázisban
 (`db.js`):
 
-- **`cache`**: a szervertől kapott listák legutóbbi állapota, kulcsonként
-  (`fetchWithCache` írja).
+- **`cache`**: a szervertől kapott olvasások legutóbbi állapota, kulcsonként
+  (`fetchWithCache` írja). Kulcsok: `events`, `people`, `expenses:<eseményId>`,
+  `event:<eseményId>` és `rate:<deviza>:<deviza>`.
 - **`outbox`**: a még fel nem töltött kiadás-módosítások, `pending`/`failed`
   státusszal.
 
@@ -579,6 +580,21 @@ lenne mit visszaadni:
 **Ezt a megkülönböztetést ne told el egyetlen közös `catch`-csel** — a
 két hibatípus fejlesztői hibát jelez, a hálózathiba pedig a normál,
 elvárt offline esetet.
+
+**Az eseményoldal kritikus útján minden olvasás ezen megy át**, az egyetlen
+eseményt betöltő `fetchEvent` is (`event:<eseményId>` kulcson) — nem csak a
+listák. Ez nem szépészeti kérdés: az `EventDetailView` a teljes törzsét (a
+kiadástáblát, az elszámolást és a „+ Új kiadás" gombot) elrejti, ha az
+esemény betöltése hibázik, tehát egyetlen cache nélküli olvasás ezen az
+úton offline az egész oldalt — az offline ÍRÁS belépőjét is — egy
+hibaüzenetre cserélné, hiába jött meg a kiadáslista a cache-ből. **Ne
+vezessünk be új, cache nélküli olvasást erre az útra.**
+
+A **csendes háttérfrissítések** ezzel szemben szándékosan cache-tartalék
+nélküliek (`events.js` `refreshQuietly`/`refreshEvent`, `expenses.js`
+`refreshQuietly`): ott már látszik adat a képernyőn, és egy cache-re-esés
+csak lecserélhetné a láthatót egy régebbi másolatra. Ezek a hibát elnyelik
+és a láthatót hagyják.
 
 A cache egy app-frissítés után is biztonságos: `readCache` a beolvasott
 értéket újra a hívó Zod sémájával validálja, és egy már nem illeszkedő

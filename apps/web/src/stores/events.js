@@ -46,9 +46,38 @@ export const useEventsStore = defineStore('events', {
     },
 
     /**
+     * Egyetlen esemény betöltése — az eseményoldal kritikus útja, ezért
+     * `fetchWithCache`-en megy, eseményenkénti (`event:<id>`) kulccsal,
+     * ugyanúgy, mint a `fetchEvents`/`fetchPeople`/`fetchExpenses`. Enélkül
+     * offline az egész eseményoldal (kiadástábla, elszámolás, „+ Új kiadás")
+     * egy hibaüzenetre cserélődött, pedig a kiadás-cache és az outbox-visszajátszás
+     * addigra már sikerrel lefutott — vagyis az offline OLVASÁS és az offline
+     * ÍRÁS is elérhetetlen volt (lásd a végső review C3 pontját).
      * @param {string} id
+     * @returns {Promise<object>} maga az esemény (a cache-jelzők nélkül)
      */
-    fetchEvent(id) {
+    async fetchEvent(id) {
+      const result = await fetchWithCache({
+        key: `event:${id}`,
+        schema: eventResponseSchema,
+        request: () => apiClient.get('/events/' + id, { schema: eventResponseSchema }),
+      });
+      return result.value;
+    },
+
+    /**
+     * Egyetlen esemény újratöltése kizárólag a hálózatról, cache-tartalék
+     * NÉLKÜL — a csendes háttérfrissítés hívja (`EventDetailView`).
+     * Szándékosan nem `fetchWithCache`: ott már látszik egy esemény a
+     * képernyőn, és egy cache-re-esés a láthatót cserélné le egy esetleg
+     * régebbi másolatra (pl. egy épp online elvégzett szerkesztés utáni
+     * offline előtérbe kerülésnél visszaugrana a szerkesztés előtti névre).
+     * A hívó a hibát elnyeli, és a láthatót hagyja — ugyanaz a felosztás,
+     * mint a `fetchEvents` és a `refreshQuietly` között.
+     * @param {string} id
+     * @returns {Promise<object>}
+     */
+    refreshEvent(id) {
       return apiClient.get('/events/' + id, { schema: eventResponseSchema });
     },
 
