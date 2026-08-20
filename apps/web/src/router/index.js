@@ -29,8 +29,13 @@ router.beforeEach(async (to) => {
     try {
       await authStore.checkAuth();
     } catch {
-      // A checkAuth hívás sikertelensége (pl. hálózati hiba) nem
-      // hitelesítettként kezelendő, a guard alább erre reagál.
+      // Ide már csak a szerver VÁLASZA (pl. 5xx) vagy egy megtört
+      // kontraktus juthat: az átvitel-szintű hibát (offline eset) maga a
+      // `checkAuth` kezeli, és ha ezen az eszközön már volt sikeres
+      // hitelesítés, hitelesítettnek is jelöli magát — enélkül minden
+      // offline hidegindulás ide, majd a bejelentkezésre esett, ahonnan
+      // offline nincs kiút (lásd a végső review C2 pontját). Amit itt
+      // elkapunk, azt a guard alább nem hitelesítettként kezeli.
     }
   }
 

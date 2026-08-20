@@ -691,6 +691,45 @@ nem töltődik vagy el nem akad. Az eldobás megerősítése megnevezi a konkré
 tételt, a „Feltöltés most” gomb pedig becsületesen jelzi, ha a nyomás azért
 nem csinált semmit, mert egy háttérbeli szinkron már éppen folyt.
 
+### 10.6 Offline hidegindulás: a „már hitelesített ezen az eszközön” jelző
+
+Az offline réteg csak akkor ér bármit, ha az app **kapcsolat nélkül is
+elindul**. A router guard (`router/index.js`) a `checkAuth`-ra támaszkodik, az
+pedig a `/auth/me`-t hívja — offline ez már a `fetch`-en elhasal, tehát a
+szervertől semmit nem lehet megtudni a munkamenetről. Ha ilyenkor a store
+kijelentkezettnek látná magát, minden offline indulás a bejelentkezésre
+dobna, ahol a jelszó POST-ja szintén elhasal: az offline réteg elérhetetlen
+lenne minden app-újraindítás után — pedig Androidon a háttérbe küldött appot
+az OS rutinból elszedi, tehát a „másnap reggel megnyitom” is hidegindulás.
+
+Ezért egy perzisztens jelző (`offline/session.js`) tartja számon, hogy ezen
+az eszközön **már volt** sikeres hitelesítés: natívan a `Preferences`-ben
+(egyezően a munkamenet-token tárolásával, `native/token.js`), böngészőben a
+`localStorage`-ban. A `checkAuth` **átvitel-szintű** hibára (a 10.1-beli
+besorolás: nem `ApiError` és nem `ZodError`) ezt a jelzőt kérdezi meg, és
+ha megvan, hitelesítettnek jelöli magát; a jelzőt kizárólag egy sikeres
+bejelentkezés vagy egy sikeres, `authenticated: true`-t adó `checkAuth`
+állítja be.
+
+**A jelző nem hitelesítő adat, és nem is helyettesíti azt.** Kérést nem lehet
+vele küldeni: a szerver felé továbbra is a cookie, illetve natívan a tárolt
+token igazol. A provizórikusan beengedett felhasználó pontosan annyit lát,
+amennyi már eddig is az eszközén volt (az IndexedDB-cache), és az első valódi
+`401` kidobja — az `api/client.js` 401-kezelése a store
+`markUnauthenticated`-jét hívja, ami az `authenticated` nullázása mellett
+**a jelzőt is törli**, ahogy a kijelentkezés is. **Ne bővítsük ezt a jelzőt
+bármi olyan elérésére, ami nem volt már eddig is helyben** — akkor
+hitelesítés-helyettesítővé válna. (Ez az app egyetlen közös jelszót használ,
+felhasználó-modell nincs, tehát cache-elt adat felhasználók között sem
+szivároghat — lásd 10.1.)
+
+Ehhez tartozik a bejelentkezési hibaüzenet becsületessége is
+(`describeLoginError`): egy átvitel-szintű hibára **nem** szabad „Hibás
+jelszó”-t mondani, mert a felhasználó a jelszavát kezdi keresni, miközben
+csak kapcsolata nincs. A besorolás ugyanaz, mint mindenhol: `429` →
+korlátozás, `5xx` → szerverhiba, `ZodError` → megtört kontraktus, egyéb
+`ApiError` (a `401` is) → valóban hibás jelszó, minden más → nincs kapcsolat.
+
 ## 11. Hibakezelés
 
 Egységes hibaformátum minden route-on: `{ error: { code, message, details? } }`
