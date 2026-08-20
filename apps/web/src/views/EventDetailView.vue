@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
@@ -54,6 +54,49 @@ async function load() {
   }
 }
 
+/**
+ * Az esemény csendes újratöltése — ugyanaz a filozófia, mint az
+ * `expensesStore.refreshQuietly`-nél: nincs „Betöltés…” felvillanás, és
+ * hiba esetén a jelenleg látszó eseményt hagyja érintetlenül. Ez tartja
+ * frissen az `event.participantIds`-t, amiből a SettlementPanel számol —
+ * enélkül egy másik eszközön felvett résztvevő elavulttá tenné a listát
+ * (lásd SettlementPanel.vue).
+ * @returns {Promise<void>}
+ */
+async function refreshEventQuietly() {
+  try {
+    event.value = await eventsStore.fetchEvent(route.params.id);
+  } catch {
+    // Csendben bukik is: a látható (esetleg elavult) esemény többet ér egy
+    // hibaüzenetnél, a következő újrakapcsolódás vagy előtér-váltás
+    // helyrehozza.
+  }
+}
+
+function handleVisibility() {
+  if (document.visibilityState === 'visible') {
+    refreshEventQuietly();
+  }
+}
+
+// Az első kapcsolódást a `load()` már lefedi — csak az azt KÖVETŐ
+// újrakapcsolódásokra akarunk reagálni (ugyanaz a minta, mint az
+// expensesStore `subscribe`-jának `opened` jelzője).
+let everConnected = false;
+watch(
+  () => expensesStore.connected,
+  (connected) => {
+    if (!connected) {
+      return;
+    }
+    if (!everConnected) {
+      everConnected = true;
+      return;
+    }
+    refreshEventQuietly();
+  },
+);
+
 onMounted(() => {
   // A feliratkozás és a kiadás-betöltés itt van, nem a kiadás-fül
   // komponensében: a két fül `v-if`-fel váltakozik, tehát az ott nyitott
@@ -66,10 +109,13 @@ onMounted(() => {
   expensesStore.fetchExpenses(route.params.id);
 
   load();
+
+  document.addEventListener('visibilitychange', handleVisibility);
 });
 
 onUnmounted(() => {
   expensesStore.unsubscribe(route.params.id);
+  document.removeEventListener('visibilitychange', handleVisibility);
 });
 
 async function handleEdit(input) {
