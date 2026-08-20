@@ -157,16 +157,17 @@ async function handleShare() {
         </tbody>
       </table>
 
+      <p v-if="hasPendingExpense" class="settlement__status">
+        Az elszámolás még fel nem töltött kiadást is tartalmaz. A devizás összegek a felvitelkori
+        árfolyammal becsültek — a végleges érték a feltöltéskor dől el.
+      </p>
+
       <div v-if="hasNothingToSettle" class="settlement__settled">
         <span class="stamp settlement__settled-stamp">Egyenleg rendezve</span>
         <p>Mindenki nullán van, nincs teendő.</p>
       </div>
 
       <template v-else>
-        <p v-if="hasPendingExpense" class="settlement__status">
-          Az elszámolás még fel nem töltött kiadást is tartalmaz. A devizás összegek a felvitelkori
-          árfolyammal becsültek — a végleges érték a feltöltéskor dől el.
-        </p>
         <span class="eyebrow settlement__transfers-label">Ki fizet kinek</span>
         <ul class="settlement__transfers">
           <li
