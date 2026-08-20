@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
+import { useExpensesStore } from '../stores/expenses.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -12,6 +13,7 @@ const route = useRoute();
 const router = useRouter();
 const eventsStore = useEventsStore();
 const peopleStore = usePeopleStore();
+const expensesStore = useExpensesStore();
 
 const event = ref(null);
 const loading = ref(true);
@@ -52,7 +54,23 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  // A feliratkozás és a kiadás-betöltés itt van, nem a kiadás-fül
+  // komponensében: a két fül `v-if`-fel váltakozik, tehát az ott nyitott
+  // stream az Elszámolás fülre váltva lezárulna — pedig az elszámolás épp
+  // ebből a listából számol.
+  //
+  // Feliratkozás ELŐBB, mint a lista betöltése: így a két művelet közben
+  // felvitt kiadás sem maradhat le.
+  expensesStore.subscribe(route.params.id);
+  expensesStore.fetchExpenses(route.params.id);
+
+  load();
+});
+
+onUnmounted(() => {
+  expensesStore.unsubscribe(route.params.id);
+});
 
 async function handleEdit(input) {
   saving.value = true;

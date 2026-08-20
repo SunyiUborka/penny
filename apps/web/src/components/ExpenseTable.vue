@@ -23,17 +23,8 @@ const pullRatio = ref(0);
 let detachPullToRefresh = null;
 
 onMounted(() => {
-  // Feliratkozás ELŐBB, mint a lista betöltése: így a két művelet közben
-  // felvitt kiadás sem maradhat le.
-  expensesStore.subscribe(props.event.id);
-  expensesStore.fetchExpenses(props.event.id);
-
   // A lehúzásos gesztus natív affordance, nem az SSE hiányának a
-  // helyettesítője — böngészőben nincs touch-gesztus, ott a kapcsolatjelző
-  // (ami egy passzív státuszfelirat, nem kezelőelem) csak azt mutatja, él-e
-  // épp a lista frissítése. Ha az `isNativeApp()` kapunak a jövőben egy
-  // másik (nem natív) oka is lenne a hamis értékre, az se kapjon
-  // böngészőben touch-gesztust.
+  // helyettesítője — böngészőben ne kapjon touch-gesztust.
   if (isNativeApp()) {
     detachPullToRefresh = attachPullToRefresh({
       onRefresh: () => expensesStore.refreshQuietly(props.event.id),
@@ -44,11 +35,7 @@ onMounted(() => {
   }
 });
 
-// A fülváltás (v-if) lebontja ezt a komponenst, tehát az Elszámolás fülön nem
-// marad nyitva a kapcsolat.
 onUnmounted(() => {
-  expensesStore.unsubscribe(props.event.id);
-
   if (detachPullToRefresh) {
     detachPullToRefresh();
     detachPullToRefresh = null;
