@@ -1,7 +1,7 @@
 import { convertMinorAmount, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
-import { NotFoundError, ValidationError } from '../errors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 import { publishExpenseChange } from './eventBus.js';
 import { parseDateOnly } from '../utils/dateOnly.js';
 
@@ -24,6 +24,7 @@ export async function createExpense(eventId, input) {
       // Idempotencia: a kliens újraküldte egy már befogadott kiadását (pl. a
       // válasz veszett el). Nem hozunk létre másodikat, és nem is publikálunk
       // új eseményt — a többi kliens ezt már megkapta.
+      assertSameEvent(existing, eventId, input.clientId);
       return existing;
     }
   }
@@ -37,7 +38,11 @@ export async function createExpense(eventId, input) {
     created = await expenseRepository.createExpense({ ...data, eventId });
   } catch (error) {
     // Verseny két egyidejű újraküldés között: az egyedi index elkapja, és a
-    // már létrejött rekordot adjuk vissza.
+    // már létrejött rekordot adjuk vissza. A re-query attól helyes akkor is,
+    // ha egyszer egy második egyedi index is kerül a kollekcióra: az csak
+    // akkor talál egyezést, ha valóban létezik ilyen clientId-jű dokumentum,
+    // tehát a duplikátumkénti kezelés helyes marad függetlenül attól, hogy
+    // melyik index dobta az E11000-et.
     const duplicate = input.clientId && error?.code === 11000;
     if (!duplicate) {
       throw error;
@@ -46,11 +51,31 @@ export async function createExpense(eventId, input) {
     if (!existing) {
       throw error;
     }
+    assertSameEvent(existing, eventId, input.clientId);
     return existing;
   }
 
   publishExpenseChange(eventId, { type: 'expense.created', expense: created });
   return created;
+}
+
+/**
+ * A clientId globálisan egyedi (az index csak a clientId mezőn van, eventId
+ * nélkül), tehát pontosan egy kiadáshoz — és ezzel egy eseményhez — tartozhat.
+ * Ha a kérés egy másik esemény alatt hivatkozik rá, az kliensi hiba: nem
+ * csendes idempotens találat, hanem 409-et kell dobni, különben a hívó egy
+ * másik esemény kiadását kapná vissza sikeres válaszként.
+ * @param {{ eventId: string }} existing
+ * @param {string} eventId
+ * @param {string} clientId
+ */
+function assertSameEvent(existing, eventId, clientId) {
+  if (existing.eventId !== eventId) {
+    throw new ConflictError(
+      `A(z) "${clientId}" clientId már egy másik eseményhez tartozó kiadáshoz van rendelve.`,
+      { clientId, expenseEventId: existing.eventId, requestedEventId: eventId },
+    );
+  }
 }
 
 /**
@@ -137,6 +162,13 @@ function buildExpenseData(input) {
       });
 
   return {
+    // Update-hívásnál (updateExpenseBodySchema === createExpenseBodySchema)
+    // input.clientId jellemzően undefined — ez szándékosan marad undefined,
+    // nem null. A Mongoose (jelenleg 8.24.2) az undefined mezőket kihagyja a
+    // $set-ből findByIdAndUpdate-nél, tehát ez ma nem-op, nem törli a meglévő
+    // clientId-t. Ha ezt "rendbe tennénk" null alapértékre, egy második ilyen
+    // update már $set: { clientId: null }-t küldene, ami a sparse-unique
+    // clientId indexbe ütközne (a null nem "hiányzó" a sparse szempontjából).
     clientId: input.clientId,
     date: parseDateOnly(input.date),
     description: input.description,
