@@ -67,7 +67,22 @@ async function request(method, path, options = {}) {
   }
 
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      // Egy nem JSON törzs (pl. egy proxy HTML 502/504-es hibaoldala, vagy egy
+      // rossz kapura tévedt kapcsolat) itt még nem dobhat `SyntaxError`-t:
+      // az egy valódi (bár rosszul formázott) szerverválaszt átvitel-szintű
+      // hibának mutatna, és a hívók (pl. az outbox) ez alapján sorba
+      // állítanák egy olyan írást, amit a szerver ténylegesen elutasított.
+      // Payload hiányában a lenti `!response.ok` ág a válasz valódi
+      // státuszkódjával dob majd `ApiError`-t; egy 2xx, de értelmezhetetlen
+      // törzs pedig a séma-ellenőrzésen bukik hangosan.
+      payload = null;
+    }
+  }
 
   if (!response.ok) {
     const errorPayload = payload?.error ?? {
