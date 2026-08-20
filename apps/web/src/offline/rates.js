@@ -20,17 +20,19 @@ function cacheKey(from, to) {
 /**
  * Árfolyam kizárólag a hálózatról. A sorbanállított kiadások feltöltésekor ezt
  * hívjuk: ott már van kapcsolat, és a végleges árfolyamot friss adatból kell
- * meghatározni.
+ * meghatározni. A `source` mezőt is visszaadja: a szerver 200-as, sémahelyes
+ * válasza mögött állhat a szerver saját, órákkal-napokkal korábbi
+ * tartalék-árfolyama is (lásd `fetchRateWithCache`).
  * @param {string} from
  * @param {string} to
- * @returns {Promise<{ rate: string, fetchedAt: Date }>}
+ * @returns {Promise<{ rate: string, fetchedAt: Date, source: 'api' | 'cache' | 'manual' }>}
  */
 export async function fetchFreshRate(from, to) {
   const result = await apiClient.get(`/rates?from=${from}&to=${to}`, {
     schema: rateResponseSchema,
   });
   await writeCache(cacheKey(from, to), { rate: result.rate, fetchedAt: result.fetchedAt });
-  return { rate: result.rate, fetchedAt: result.fetchedAt };
+  return { rate: result.rate, fetchedAt: result.fetchedAt, source: result.source };
 }
 
 /**
@@ -44,7 +46,14 @@ export async function fetchFreshRate(from, to) {
 export async function fetchRateWithCache(from, to) {
   try {
     const fresh = await fetchFreshRate(from, to);
-    return { ...fresh, estimated: false };
+    // A 200-as, sémahelyes válasz önmagában nem jelenti, hogy élő árfolyamot
+    // kaptunk: ha a szerver saját élő API-hívása hibázott, a rateService.js
+    // a nála korábban eltárolt (akár napokkal ezelőtti) árfolyamot adja
+    // vissza `source: 'cache'` jelzéssel — ez a mi szempontunkból ugyanúgy
+    // becslés, mint a saját helyi cache-tartalékunk, csak a hiba a szerver
+    // oldalán történt, nem a mi hálózatunkban. Ezért csak a `source: 'api'`
+    // számít valóban frissnek.
+    return { rate: fresh.rate, fetchedAt: fresh.fetchedAt, estimated: fresh.source !== 'api' };
   } catch (error) {
     // A cache.js `fetchWithCache`-ével azonos szabály: ha a szerver ténylegesen
     // válaszolt (ApiError) vagy a válasz alakja nem illik a sémára (ZodError),
