@@ -148,10 +148,14 @@ támogatottságára) — érintéses affordancia, nem az SSE hiányának pótlé
 
 ## Kockázatok
 
-- **`CapacitorWebFetch` elérhetősége.** A terv erre épül. Ha a Capacitor
-  jelenlegi verziója más néven tartja meg az eredeti `fetch`-et, vagy egyáltalán
-  nem tartja meg, a tartalék a jegy-alapú változat. **Ezt kell először
-  igazolni eszközön**, mielőtt bármi ráépül.
+- **`CapacitorWebFetch` elérhetősége — igazolva, nem feltevés.** Az APK-ba
+  kerülő `native-bridge.js`-ben (Capacitor 8.5.0) ott van a
+  `win.CapacitorWebFetch = window.fetch` hozzárendelés, közvetlenül a
+  `window.fetch` felülírása előtt. Tehát az eredeti implementáció elérhető
+  marad. Ezt a repóban lévő bridge-fájlból ellenőriztük, eszköz nélkül.
+  Maradék kockázat: egy jövőbeli Capacitor-frissítés átnevezheti — ezért a
+  kliens ne dőljön el csendben, ha a globális hiányzik, hanem naplózzon és
+  essen vissza a nem streamelő útra.
 - **A WebView origója.** A CORS-engedély ehhez az origóhoz szól; a feltevés
   `https://localhost` (a Capacitor alapértelmezett `androidScheme`-je `https`,
   és a projekt nem írja felül). Eszközön ellenőrizendő a tényleges
