@@ -17,10 +17,11 @@ ez a dokumentum annak technikai mélyfúrása.
 7. [Árfolyam-lekérés és cache](#7-árfolyam-lekérés-és-cache)
 8. [Elszámolási algoritmus](#8-elszámolási-algoritmus)
 9. [Backend rétegzés és API végpontok](#9-backend-rétegzés-és-api-végpontok)
-10. [Hibakezelés](#10-hibakezelés)
-11. [Frontend felépítés](#11-frontend-felépítés)
-12. [Deployment](#12-deployment)
-13. [Kódminőség](#13-kódminőség)
+10. [Kliensoldali offline réteg](#10-kliensoldali-offline-réteg)
+11. [Hibakezelés](#11-hibakezelés)
+12. [Frontend felépítés](#12-frontend-felépítés)
+13. [Deployment](#13-deployment)
+14. [Kódminőség](#14-kódminőség)
 
 ---
 
@@ -211,7 +212,7 @@ Kulcs mechanizmusok:
 
 A pénzkezelés szigorú szabályokra épül, amiket a `packages/shared` csomag
 kényszerít ki és amiket **ESLint szabály is véd** (lásd
-[13. fejezet](#13-kódminőség)):
+[14. fejezet](#14-kódminőség)):
 
 - **Minden összeg egész szám, a pénznem legkisebb egységében**
   (`amountMinor`) tárolódik — sosem lebegőpontos major egységben. A
@@ -542,7 +543,147 @@ SSE-n is visszajön, ezért az `upsertExpense` azonos `id`-re cserél, nem
 duplikál — és az egyező `updatedAt` alapján tudja, hogy ezt a változást már
 mi magunk alkalmaztuk, tehát nem villantja fel újra a sort.
 
-## 10. Hibakezelés
+## 10. Kliensoldali offline réteg
+
+Egy IndexedDB-alapú réteg (`apps/web/src/offline/`, az `idb` csomaggal) ül a
+Pinia store-ok és az `apiClient` között — a böngészőben és az APK-ban
+egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázisban
+(`db.js`):
+
+- **`cache`**: a szervertől kapott listák legutóbbi állapota, kulcsonként
+  (`fetchWithCache` írja).
+- **`outbox`**: a még fel nem töltött kiadás-módosítások, `pending`/`failed`
+  státusszal.
+
+### 10.1 Olvasás: hálózat-először, cache tartalékként
+
+`fetchWithCache` (`offline/cache.js`) mindig a hálózatot próbálja először; a
+sikeres választ egyúttal a cache-be is írja. Csak a hálózat **tényleges,
+besorolatlan** elérhetetlensége (dobott, nem `ApiError`/`ZodError` kivétel)
+esik vissza a legutóbb cache-elt válaszra, `stale: true` jelzéssel — ezt az
+`OfflineBanner.vue` egy halk sávval mutatja („Offline — utoljára frissítve:
+…”).
+
+Két hibatípus **szándékosan sosem** esik vissza cache-re, még akkor sem, ha
+lenne mit visszaadni:
+
+- **`ApiError`** — a szerver ténylegesen válaszolt (pl. 404, 401,
+  validációs hiba). Ez nem hálózathiba, hanem egy valódi, a hívóra tartozó
+  válasz; egy csendes cache-re-esés elrejtené a felhasználó elől, hogy pl. a
+  session lejárt.
+- **`ZodError`** — a válasz 2xx volt, de a törzse nem illik a várt sémára.
+  Ez azt jelenti, hogy a kliens és a szerver kontraktusa szétcsúszott
+  (pl. app-frissítés után); ezt hangosan kell jelezni, egy néma
+  cache-re-esés örökre elrejthetné ezt a hibát.
+
+**Ezt a megkülönböztetést ne told el egyetlen közös `catch`-csel** — a
+két hibatípus fejlesztői hibát jelez, a hálózathiba pedig a normál,
+elvárt offline esetet.
+
+A cache egy app-frissítés után is biztonságos: `readCache` a beolvasott
+értéket újra a hívó Zod sémájával validálja, és egy már nem illeszkedő
+rekordot inkább eldob (törli), mint hibásan visszaadna.
+
+### 10.2 Írás: csak kiadás, outbox sorbanállítással
+
+**Szándékosan kizárólag a kiadás-mutációk** (létrehozás, szerkesztés,
+törlés) mennek offline sorba (`stores/expenses.js` `createExpense` /
+`updateExpense` / `deleteExpense`, `offline/outbox.js` `enqueue`) — a
+személy- és eseménykezelés online marad. Ez tudatos terjedelem-szűkítés, nem
+hiányosság: ezek a műveletek keresztreferenciákat érintenek (résztvevő
+eltávolítása, személy törlése — lásd [4. fejezet](#4-adatmodell)), amiknek az
+érvényessége a szerveren, a teljes adatállapot ismeretében dől el, és offline
+állapotban ez az ellenőrzés csak félrevezető lehetne. **Ne bővítsd ezt a kört
+anélkül, hogy újragondolnád, hogyan validálna egy ilyen keresztreferenciás
+szabály egy elavult, helyi állapoton.**
+
+Egy sorbaállított tétel a listában azonnal megjelenik `pending: true`
+jelzővel (`toPendingExpense`/`toPendingUpdate`), és **nem szerkeszthető** — a
+szerkesztés a szervertől kapott valódi kiadás-azonosítóra támaszkodik, ami
+egy még fel nem töltött sornak nincs (`ExpenseTable.vue`). A pending sor
+forint-értékét (`baseAmountMinor`) a kliens **ugyanazzal** a
+`convertMinorAmount` függvénnyel számolja, amit a szerver `buildExpenseData`-
+ja is használ (`computePendingBaseAmountMinor`) — enélkül egy devizás
+sorbaálló kiadás rossz összeggel torzítaná az egyenlegeket, amíg fel nem
+töltődik.
+
+**A duplikációt a `clientId` mező zárja ki** (Task 1,
+`packages/shared/src/schemas/expense.js`, `expenseService.createExpense`): a szerver egy már
+látott `clientId`-re a meglévő kiadást adja vissza, új rekord létrehozása
+nélkül — egy megszakadt kérés újraküldése ezért biztonságos. Ha ugyanaz a
+`clientId` egy **másik** eseményhez tartozó kiadáshoz van már rendelve (pl.
+egy `outbox`-bejegyzés véletlenül egy törölt, majd újra létrehozott
+eseményre mutat), a szerver `409`-cel utasítja el ahelyett, hogy csendben a
+másik esemény kiadását adná vissza (`assertSameEvent`).
+
+### 10.3 Árfolyam-becslés
+
+`fetchRateWithCache` (`offline/rates.js`) minden sikeres lekérést elment a
+cache-be, és hálózathiba esetén a legutóbb ismertre esik vissza — ugyanazzal
+a `ApiError`/`ZodError` kivétellel a cache-re-esés alól, mint a 10.1-ben.
+
+**A becslést a `fetchedAt` mező napja dönti el (UTC, egyezően a szerver napi
+árfolyam-cache kulcsával, `todayDateOnly()`), nem a válasz `source` mezője.**
+Ennek oka: a szerver naponta legfeljebb egyszer hív ki élő API-t egy adott
+valutapárra, minden aznapi további lekérés `source: "cache"`-t ad vissza —
+ez a normál, egészséges eset, nem becslés. Ha a `source` mezőt használnánk a
+döntéshez, a jelölés majdnem mindig látszódna, és elveszítené az értelmét.
+Az egyetlen valóban elavult eset az, amikor a szerver saját élő hívása
+hibázott, és egy korábbi napról származó tartalék árfolyamot adott vissza —
+ezt viszont a `source` mező önmagában nem különbözteti meg az aznapi
+cache-től, csak a `fetchedAt` napja. **Ne cseréld ezt vissza a `source`
+mezőre** — az visszahozná a fent leírt, folyamatosan látszódó, értelmét
+vesztett jelölést.
+
+A felvitelkor (esetleg becsült) árfolyam csak előnézet: feltöltéskor a
+szinkron-motor mindig frissen lekéri az árfolyamot (`fetchFreshRate`), és
+ezzel számolja újra a payloadot — a véglegesen tárolt érték emiatt sosem egy
+elavult becslés.
+
+### 10.4 Elszámolás offline kiadásokkal
+
+A `SettlementPanel` a betöltött kiadáslistából számol
+([8. fejezet](#8-elszámolási-algoritmus)), ami a `pending` (még fel nem töltött) sorokat is
+tartalmazza — ez ingyen működik offline, de azt is jelenti, hogy **a
+sorbanálló kiadások is beleszámítanak az egyenlegekbe**. Ez elsőre
+meglepő lehet, ha valaki a listát nézve nem veszi észre, hogy egy sor még
+`pending`; a panel ezért mindig kiír egy figyelmeztetést, ha van legalább
+egy fel nem töltött kiadás, és a devizás pending sorok forint-értékét `≈`
+jelöléssel mutatja.
+
+### 10.5 Szinkron-motor
+
+`syncOutbox` (`offline/sync.js`) a sorbanállított tételeket a **létrehozásuk
+sorrendjében** tölti fel, és három esemény indítja (`startAutoSync`,
+`main.js`-ből hívva): a hálózat visszatérése (`@capacitor/network`
+`networkStatusChange`), az app előtérbe kerülése (`visibilitychange`), és a
+Szinkronizálás képernyő „Feltöltés most” gombja. Egyszerre csak egy futás
+engedélyezett (`running` jelző); egy ütköző hívás `skipped: true`-val tér
+vissza, hogy a hívó (a Szinkronizálás képernyő) meg tudja különböztetni
+„nincs mit feltölteni”-t egy háttérben már folyó feltöltéstől.
+
+**A `markFailed` — a felhasználói döntést igénylő végállapot — kizárólag a
+tételről magáról szóló, végleges HTTP-verdikteknek van fenntartva: `400`
+(érvénytelen adat), `404` (a célesemény/kiadás eltűnt) és `409` (ütköző
+`clientId`, lásd 10.2).** Ezekre ugyanazzal a tartalommal újraküldve a
+tétel mindig ugyanígy elbukna, tehát nem érdemes automatikusan újrapróbálni.
+Minden más eset — `401`/`403` (lejárt munkamenet), `408`/`429` és minden
+`5xx`, illetve maga a hálózathiba — a tételt `pending` állapotban hagyja: a
+szerver ilyenkor vagy nem is a tételről mond véleményt (a munkamenet járt
+le, nem a kiadás hibás), vagy egy átmeneti, minden mögötte lévő tételt is
+érintő hibáról van szó. **Ne bővítsd a `markFailed`-hez vezető
+státuszkód-halmazt anélkül, hogy megválaszolnád: ugyanaz a kérés,
+változatlan tartalommal, újraküldve is ugyanígy elbukna-e — ha a válasz
+"nem feltétlenül", a tételnek `pending`-en kell maradnia.**
+
+Egy elakadt tétel önmagától sosem próbálkozik újra — ez a Szinkronizálás
+képernyő (`/sync`, `SyncView.vue`) dolga, ami csak akkor jelenik meg a
+navigációban, ha van várakozó vagy elakadt elem. A képernyő tételenkénti
+„Újra” és „Eldobás” műveletet kínál (az eldobás megerősítése megnevezi a
+konkrét tételt), és a „Feltöltés most” gomb becsületesen jelzi, ha a nyomás
+azért nem csinált semmit, mert egy háttérbeli szinkron már éppen folyt.
+
+## 11. Hibakezelés
 
 Egységes hibaformátum minden route-on: `{ error: { code, message, details? } }`
 (`apps/api/src/plugins/errorHandler.js`).
@@ -562,7 +703,7 @@ Egységes hibaformátum minden route-on: `{ error: { code, message, details? } }
   borítékot csomagolja ki egy `ApiError` osztályba (`code`, `statusCode`,
   `details`), amit a Vue komponensek `error.message`-ként jelenítenek meg.
 
-## 11. Frontend felépítés
+## 12. Frontend felépítés
 
 ```
 main.js              App bootstrap: Pinia + Router + téma inicializálás
@@ -597,7 +738,7 @@ components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszá
 - **Téma (világos/sötét)**: `utils/theme.js`, localStorage-ban perzisztálva,
   `App.vue`-ban egy gombbal váltható.
 
-## 12. Deployment
+## 13. Deployment
 
 ### Produkciós mód
 
@@ -644,7 +785,7 @@ szakaszát a teljes listáért. Kiemelendő biztonsági szempont: a `.env` fájl
 változóhelyettesítésként értelmez, ezért `$`-t tartalmazó jelszót duplán kell
 írni (`$$`), különben csonkul.
 
-## 13. Kódminőség
+## 14. Kódminőség
 
 - ESLint flat config + Prettier, CI-ben ellenőrizve
   (`.github/workflows/ci.yml`: lint, formázás-ellenőrzés, build).

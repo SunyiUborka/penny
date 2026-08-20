@@ -92,8 +92,10 @@ service worker nem regisztrálódik, a Chrome nem ajánlja fel a telepítést, �
 a „Hozzáadás a főképernyőhöz" csak egy sima böngészőikont hoz létre, ami
 böngészősávval nyílik meg.
 
-Amit ez nem ad: offline működés nincs — a statikus héj gyorsítótárból
-betöltődik, de adatkapcsolat nélkül a lista üres marad.
+Ez a telepíthetőség csak a statikus héjra (HTML/CSS/JS) vonatkozik, amit a
+service worker cache-el. A tényleges adatréteg — korábban látott listák
+olvasása és kiadás felvétele/módosítása/törlése kapcsolat nélkül — ugyanúgy
+működik itt, mint az APK-ban; lásd az „Offline működés" szakaszt lentebb.
 
 Az ikonokat a `scripts/generate-icons.js` állítja elő, dependency nélkül. A
 generált PNG-k committolva vannak, tehát a build nem futtatja a scriptet; ha az
@@ -195,6 +197,52 @@ lejárata, az app letiltja az Android-mentést
 (`android:allowBackup="false"` az `AndroidManifest.xml`-ben) — a token így
 nem kerülhet be a Google felhő-mentésbe vagy egy eszközcsere során átvitt
 adatok közé.
+
+### Offline működés
+
+Ez a réteg (`apps/web/src/offline/`) a böngészőben és az APK-ban egyaránt
+aktív, IndexedDB-re épül.
+
+**Mi működik kapcsolat nélkül:**
+
+- A korábban sikeresen betöltött listák (kiadások) olvashatók a legutóbbi
+  állapotukban; a felület egy halk sávval jelzi, hogy „Offline — utoljára
+  frissítve: …”.
+- Kiadás felvehető, módosítható, törölhető. A sorbanállított tétel a listában
+  „függőben” jelzéssel jelenik meg, és nem szerkeszthető — egy szerkesztés a
+  szinkron képernyőn, a feltöltés utáni valódi kiadáson végezhető el.
+- Az Elszámolás fül offline is számol, mert a betöltött (és a még
+  sorbanálló) kiadáslistából dolgozik — a fel nem töltött tételek **is**
+  beleszámítanak az egyenlegekbe, a devizás sorok forint-értéke pedig a
+  felviteli (esetleg becsült) árfolyammal.
+
+**Mi marad kizárólag online:** a személy- és eseménykezelés (létrehozás,
+átnevezés, résztvevő-módosítás, törlés), valamint egy friss, aznapi
+árfolyam lekérése — kapcsolat nélkül csak a legutóbb ismert, cache-elt
+árfolyam áll rendelkezésre.
+
+**Feltöltés:** a sorbanállított kiadások a létrehozásuk sorrendjében töltődnek
+fel, három esemény bármelyikére: a hálózat visszatérésekor, az app előtérbe
+kerülésekor, vagy a Szinkronizálás képernyő „Feltöltés most” gombjára. A
+duplikációt a kiadáshoz rendelt `clientId` mező zárja ki — a szerver ez
+alapján ismeri fel az ismételt kérést —, ezért egy megszakadt feltöltés
+újraküldése biztonságos.
+
+Devizás kiadásnál a felvitelkor (esetleg cache-elt, `≈` jelöléssel mutatott)
+árfolyam csak becslés: a forintra átváltott végleges érték mindig a
+**feltöltéskor** frissen lekért árfolyammal dől el.
+
+Egy tétel csak akkor kerül elakadt („failed”) állapotba, ha a szerver
+véglegesen, magáról a tételről mond nemet (érvénytelen adat, törölt esemény,
+ütköző `clientId`) — ezeket a Szinkronizálás képernyő listázza, „Újra” vagy
+„Eldobás” gombbal kezelhetők, és önmaguktól nem próbálkoznak újra. Minden más
+hiba (lejárt munkamenet, túlterhelt szerver, hálózat) a tételt egyszerűen
+várakozó állapotban hagyja a következő próbálkozásig.
+
+**Fontos korlát:** az app törlése (vagy egy aláíráscsere miatti kényszerű
+újratelepítés, lásd fentebb) a még fel nem töltött, sorbanállított
+módosításokat is véglegesen elviszi — ezeket érdemes feltölteni (vagy a
+Szinkronizálás képernyőn eldobni), mielőtt egy ilyen lépésre sor kerülne.
 
 ### Amit a natív app másképp csinál, mint a PWA
 
