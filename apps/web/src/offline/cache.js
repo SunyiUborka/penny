@@ -1,3 +1,4 @@
+import { ZodError } from 'zod';
 import { CACHE_STORE, getDb } from './db.js';
 import { ApiError } from '../api/client.js';
 import { useOfflineStore } from '../stores/offline.js';
@@ -36,9 +37,14 @@ export async function writeCache(key, value) {
 /**
  * Hálózat-először olvasás cache-tartalékkal.
  *
- * A szerver által adott hibát (ApiError) továbbdobjuk: az nem hálózathiba,
- * hanem valódi válasz (404, 401, validációs hiba), amit a hívónak kezelnie
- * kell. Csak a hálózat elérhetetlenségére esünk vissza a cache-re.
+ * Csak a hálózat tényleges elérhetetlensége esik vissza a cache-re. Két
+ * hibatípust szándékosan nem kezelünk tartalékként:
+ *  - `ApiError`: a szerver ténylegesen válaszolt (404, 401, validációs hiba)
+ *    — ez nem hálózathiba, a hívónak kell kezelnie;
+ *  - `ZodError`: a válasz 2xx volt, de a törzse nem illik a várt sémára —
+ *    ez azt jelenti, hogy a szerver és a kliens elvárása szétcsúszott. Ezt
+ *    hangosan kell jelezni, mert egy csendes cache-re-esés örökre elrejtené
+ *    ezt a szerződés-eltérést.
  *
  * @param {{ key: string, schema: import('zod').ZodType, request: () => Promise<unknown> }} options
  * @returns {Promise<{ value: unknown, stale: boolean, fetchedAt: Date }>}
@@ -61,7 +67,7 @@ export async function fetchWithCache(options) {
     offlineStore.setFresh(key, fetchedAt);
     return { value, stale: false, fetchedAt };
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (error instanceof ApiError || error instanceof ZodError) {
       throw error;
     }
     const cached = await readCache(key, schema);
