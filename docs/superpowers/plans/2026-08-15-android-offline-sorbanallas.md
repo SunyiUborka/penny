@@ -603,18 +603,43 @@ export async function fetchFreshRate(from, to) {
 export async function fetchRateWithCache(from, to) {
   try {
     const fresh = await fetchFreshRate(from, to);
-    return { ...fresh, estimated: false };
+    // A becslést a `fetchedAt` NAPJA dönti el, nem a szerver `source` mezője:
+    // a szerver naponta legfeljebb egyszer hív ki élő API-t egy valutapárra,
+    // minden aznapi további lekérés `source: "cache"`-t ad — ez a normál eset.
+    // Az egyetlen valóban elavult eset az, amikor a szerver élő hívása bukott,
+    // és korábbi napról származó tartalékot adott vissza; ezt csak a
+    // `fetchedAt` napja árulja el. Az összehasonlítás UTC szerint megy, mint a
+    // szerver `todayDateOnly()`-ja, különben este egy napot csúszhatnának.
+    return { ...fresh, estimated: !isToday(fresh.fetchedAt) };
   } catch (error) {
+    // Ugyanaz a szabály, mint a `cache.js` `fetchWithCache`-ében: a szerver
+    // válasza (ApiError) és a sémát nem teljesítő törzs (ZodError) hangosan
+    // bukik, nem rejtjük el becsléssel. Csak a besorolatlan
+    // (átvitel-szintű) hiba esik vissza a legutóbb ismert árfolyamra.
+    if (error instanceof ApiError || error instanceof ZodError) {
+      throw error;
+    }
     const cached = await readCache(cacheKey(from, to), cachedRateSchema);
     if (!cached) {
       throw error;
     }
-    return { rate: cached.value.rate, fetchedAt: cached.value.fetchedAt, estimated: true };
+    return {
+      rate: cached.value.rate,
+      fetchedAt: cached.value.fetchedAt,
+      estimated: !isToday(cached.value.fetchedAt),
+    };
   }
 }
 
 export { SETTLEMENT_CURRENCY };
 ```
+
+> **Frissítve a leszállított kódhoz.** Az eredeti snippet mindent elnyelt a
+> `catch`-ben, és a `estimated`-et fixen `false`-ra állította a friss ágon. Ez
+> két hibát okozott: a szerver saját tartalék-válaszát (200, `source: "cache"`,
+> régebbi `fetchedAt`) friss árfolyamnak vette, és a hibaosztályokat sem
+> különítette el. A `isToday` segédfüggvényt és az `ApiError`/`ZodError`
+> importokat a fájl tetejére kell felvenni.
 
 A séma a fájl tetejére (a `zod` importtal együtt):
 
