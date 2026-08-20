@@ -56,11 +56,22 @@ class RateResolutionError extends Error {
  *
  * A `failed` állapotú elemeket nem próbáljuk újra automatikusan: ezek
  * felhasználói döntést igényelnek (lásd a Szinkronizálás képernyőt).
- * @returns {Promise<{ uploaded: number, failed: number }>}
+ *
+ * Egyszerre csak egy futás engedélyezett (lásd a `running` jelzőt): ha ezt a
+ * hívást egy már folyamatban lévő futás közben kezdeményezték (pl. a
+ * Szinkronizálás képernyő "Feltöltés most" gombja ütközik egy a háttérben,
+ * hálózat-visszatérésre vagy előtérbe kerülésre induló automatikus
+ * szinkronnal), ez a hívás azonnal, munka nélkül tér vissza — de ezt a
+ * `skipped: true` jelzővel is kimondja, nem csak a nullázott
+ * `uploaded`/`failed` számokkal. E nélkül a hívó (a Szinkronizálás képernyő)
+ * nem tudná megkülönböztetni "nem volt mit feltölteni" és "most éppen egy
+ * másik futás dolgozik" között, és hamisan azt jelentené a felhasználónak,
+ * hogy semmi sem történt, miközben a háttérben feltöltés zajlik.
+ * @returns {Promise<{ uploaded: number, failed: number, skipped: boolean }>}
  */
 export async function syncOutbox() {
   if (running) {
-    return { uploaded: 0, failed: 0 };
+    return { uploaded: 0, failed: 0, skipped: true };
   }
   running = true;
   let uploaded = 0;
@@ -135,7 +146,7 @@ export async function syncOutbox() {
     await refreshCounts();
   }
 
-  return { uploaded, failed };
+  return { uploaded, failed, skipped: false };
 }
 
 /**
