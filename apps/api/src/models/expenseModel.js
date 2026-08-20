@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 
 const expenseSchema = new Schema(
   {
+    clientId: { type: String, required: false },
     eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true },
     date: { type: Date, required: true },
     description: { type: String, required: true, trim: true },
@@ -30,5 +31,8 @@ const expenseSchema = new Schema(
 );
 
 expenseSchema.index({ eventId: 1, date: -1 });
+// Ritka egyedi index: a clientId nélküli (webes) kiadásokat nem érinti, de
+// ugyanazt a clientId-t kétszer nem engedi be.
+expenseSchema.index({ clientId: 1 }, { unique: true, sparse: true });
 
 export const ExpenseModel = mongoose.model('Expense', expenseSchema);

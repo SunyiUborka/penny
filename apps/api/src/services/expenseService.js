@@ -18,10 +18,37 @@ export async function listExpensesForEvent(eventId) {
  * @param {object} input
  */
 export async function createExpense(eventId, input) {
+  if (input.clientId) {
+    const existing = await expenseRepository.findExpenseByClientId(input.clientId);
+    if (existing) {
+      // Idempotencia: a kliens újraküldte egy már befogadott kiadását (pl. a
+      // válasz veszett el). Nem hozunk létre másodikat, és nem is publikálunk
+      // új eseményt — a többi kliens ezt már megkapta.
+      return existing;
+    }
+  }
+
   const event = await getEventOrThrow(eventId);
   assertParticipants(event, input);
   const data = buildExpenseData(input);
-  const created = await expenseRepository.createExpense({ ...data, eventId });
+
+  let created;
+  try {
+    created = await expenseRepository.createExpense({ ...data, eventId });
+  } catch (error) {
+    // Verseny két egyidejű újraküldés között: az egyedi index elkapja, és a
+    // már létrejött rekordot adjuk vissza.
+    const duplicate = input.clientId && error?.code === 11000;
+    if (!duplicate) {
+      throw error;
+    }
+    const existing = await expenseRepository.findExpenseByClientId(input.clientId);
+    if (!existing) {
+      throw error;
+    }
+    return existing;
+  }
+
   publishExpenseChange(eventId, { type: 'expense.created', expense: created });
   return created;
 }
@@ -110,6 +137,7 @@ function buildExpenseData(input) {
       });
 
   return {
+    clientId: input.clientId,
     date: parseDateOnly(input.date),
     description: input.description,
     payerId: input.payerId,

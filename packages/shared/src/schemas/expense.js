@@ -12,6 +12,12 @@ export const rateSourceEnumSchema = z.enum(['api', 'manual']);
 
 export const createExpenseBodySchema = z
   .object({
+    /**
+     * A kliens által generált azonosító. Offline sorbanállított kiadásnál a
+     * megszakadt kérés újraküldése enélkül duplikálna; a szerver ez alapján
+     * ismeri fel, hogy ugyanarról a kiadásról van szó.
+     */
+    clientId: z.string().uuid().optional(),
     date: dateOnlyStringSchema,
     description: z.string().trim().min(1, 'A leírás nem lehet üres.'),
     payerId: personIdSchema,
@@ -37,6 +43,7 @@ export const updateExpenseBodySchema = createExpenseBodySchema;
 
 export const expenseResponseSchema = z.object({
   id: personIdSchema,
+  clientId: z.string().uuid().optional(),
   eventId: personIdSchema,
   date: z.coerce.date(),
   description: z.string(),

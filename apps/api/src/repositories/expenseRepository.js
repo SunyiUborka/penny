@@ -33,6 +33,15 @@ export async function findExpenseById(id) {
 }
 
 /**
+ * @param {string} clientId
+ * @returns {Promise<object | null>}
+ */
+export async function findExpenseByClientId(clientId) {
+  const doc = await ExpenseModel.findOne({ clientId });
+  return doc ? serialize(doc) : null;
+}
+
+/**
  * @param {object} input
  */
 export async function createExpense(input) {
