@@ -49,8 +49,15 @@ export async function fetchWithCache(options) {
 
   try {
     const value = await request();
-    await writeCache(key, value);
     const fetchedAt = new Date();
+    try {
+      await writeCache(key, value);
+    } catch (writeError) {
+      // Egy írási hiba (betelt vagy megtagadott tárhely) nem ronthatja el
+      // egy már sikeres hálózati választ — ekkor a cache csak degradált,
+      // nem a lekérés bukott el.
+      console.error('Nem sikerült a választ a cache-be írni:', writeError);
+    }
     offlineStore.setFresh(fetchedAt);
     return { value, stale: false, fetchedAt };
   } catch (error) {
