@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { personListResponseSchema, personResponseSchema } from '@filler/shared';
 import { apiClient } from '../api/client.js';
+import { fetchWithCache } from '../offline/cache.js';
 
 export const usePeopleStore = defineStore('people', {
   state: () => ({
@@ -21,7 +22,12 @@ export const usePeopleStore = defineStore('people', {
       this.loading = true;
       this.error = null;
       try {
-        this.people = await apiClient.get('/people', { schema: personListResponseSchema });
+        const result = await fetchWithCache({
+          key: 'people',
+          schema: personListResponseSchema,
+          request: () => apiClient.get('/people', { schema: personListResponseSchema }),
+        });
+        this.people = result.value;
       } catch (error) {
         this.error = error;
       } finally {

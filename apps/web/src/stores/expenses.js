@@ -6,6 +6,7 @@ import {
 } from '@filler/shared';
 import { apiClient } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
+import { fetchWithCache } from '../offline/cache.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -65,8 +66,11 @@ export const useExpensesStore = defineStore('expenses', {
       this.error = null;
       latestFetchEventId = eventId;
       try {
-        const expenses = await apiClient.get(`/events/${eventId}/expenses`, {
+        const result = await fetchWithCache({
+          key: `expenses:${eventId}`,
           schema: expenseListResponseSchema,
+          request: () =>
+            apiClient.get(`/events/${eventId}/expenses`, { schema: expenseListResponseSchema }),
         });
         if (latestFetchEventId !== eventId) {
           // Közben egy másik eseményre navigáltunk, és az a hívás már
@@ -74,7 +78,7 @@ export const useExpensesStore = defineStore('expenses', {
           // elkésett, nem írhatja felül egy másik esemény listáját.
           return;
         }
-        this.expenses = expenses;
+        this.expenses = result.value;
       } catch (error) {
         if (latestFetchEventId !== eventId) {
           return;
