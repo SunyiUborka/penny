@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Előfeltétel:** a `docs/superpowers/plans/2026-08-15-android-apk-csomagolas.md` terv végig végrehajtva. Innen származik az `isNativeApp()`, a natív runtime, a token-alapú hitelesítés és a működő APK-build.
+**Előfeltétel:** a `docs/superpowers/plans/2026-08-15-android-apk-csomagolas.md`
+**és** a `docs/superpowers/plans/2026-08-20-elo-frissites.md` terv végig végrehajtva. Innen származik az `isNativeApp()`, a natív runtime, a token-alapú hitelesítés és a működő APK-build.
 
 **Goal:** Az app adatkapcsolat nélkül is használható: a korábban látott adatok olvashatók, új kiadás felvehető, és a hálózat visszatérésekor minden feltöltődik — duplikáció és néma adatvesztés nélkül.
 
@@ -313,7 +314,7 @@ git commit -m "feat(web): IndexedDB alapréteg és offline állapot-store"
 **Files:**
 
 - Create: `apps/web/src/offline/cache.js`, `apps/web/src/components/OfflineBanner.vue`
-- Modify: `apps/web/src/stores/events.js` (`fetchEvents`), `apps/web/src/stores/people.js` (`fetchPeople`), `apps/web/src/stores/expenses.js` (`fetchExpenses`), `apps/web/src/App.vue` (a sáv beillesztése), `apps/web/src/components/SettlementPanel.vue` (helyi elszámolás offline)
+- Modify: `apps/web/src/stores/events.js` (`fetchEvents`), `apps/web/src/stores/people.js` (`fetchPeople`), `apps/web/src/stores/expenses.js` (`fetchExpenses`), `apps/web/src/App.vue` (a sáv beillesztése)
 
 **Interfaces:**
 
@@ -509,73 +510,14 @@ A `<template>`-ben a `<header>` után, a `<router-view />` elé:
 <OfflineBanner />
 ```
 
-- [ ] **Step 7: Elszámolás offline, a cache-elt kiadásokból**
+> **Az eredeti Step 7 törölve.** Az „elszámolás offline, a cache-elt
+> kiadásokból" lépés elavult: az élő-frissítés kör után a
+> `apps/web/src/components/SettlementPanel.vue` **mindig** helyben számol a
+> `expensesStore.expenses` listából, saját HTTP-kérés nélkül. Amint a
+> kiadáslista a cache-ből jön (Step 2-6), az elszámolás offline is működik —
+> nincs mit külön megírni.
 
-`apps/web/src/components/SettlementPanel.vue` — a `load()` függvény cseréje:
-
-```js
-import {
-  computeSettlement,
-  formatMoney,
-  SETTLEMENT_CURRENCY,
-  settlementResponseSchema,
-} from '@filler/shared';
-import { expenseListResponseSchema } from '@filler/shared';
-import { readCache } from '../offline/cache.js';
-import { ApiError } from '../api/client.js';
-```
-
-```js
-async function load() {
-  loading.value = true;
-  loadError.value = false;
-  try {
-    settlement.value = await apiClient.get(`/events/${props.event.id}/settlement`, {
-      schema: settlementResponseSchema,
-    });
-    offline.value = false;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      loadError.value = true;
-      return;
-    }
-    // Hálózathiba: a cache-elt kiadásokból helyben is kiszámolható ugyanaz —
-    // a computeSettlement a shared csomagból a kliensen is fut.
-    const cached = await readCache(`expenses:${props.event.id}`, expenseListResponseSchema);
-    if (!cached) {
-      loadError.value = true;
-      return;
-    }
-    settlement.value = computeSettlement({
-      participantIds: props.event.participantIds,
-      expenses: cached.value.map((expense) => ({
-        payerId: expense.payerId,
-        baseAmountMinor: expense.baseAmountMinor,
-        sharedWithIds: expense.sharedWithIds,
-      })),
-    });
-    offline.value = true;
-  } finally {
-    loading.value = false;
-  }
-}
-```
-
-Vedd fel az `offline` ref-et a többi mellé:
-
-```js
-const offline = ref(false);
-```
-
-És a sablonban, a „Ki fizet kinek" felirat fölé:
-
-```html
-<p v-if="offline" class="settlement__status">
-  Offline számolt elszámolás a legutóbb letöltött kiadásokból.
-</p>
-```
-
-- [ ] **Step 8: Ellenőrzés — online viselkedés változatlan**
+- [ ] **Step 7: Ellenőrzés — online viselkedés változatlan**
 
 ```bash
 npm run lint
@@ -585,19 +527,19 @@ docker compose up -d --build
 
 Böngészőben: események lista, esemény megnyitása, elszámolás fül. Elvárt: minden a megszokott, az offline sáv nem látszik.
 
-- [ ] **Step 9: Ellenőrzés — offline olvasás**
+- [ ] **Step 8: Ellenőrzés — offline olvasás**
 
 Böngészőben tölts be egy eseményt a kiadásaival és az elszámolással (hogy a cache feltöltődjön). Ezután DevTools → Network → „Offline" bekapcsolása, majd oldalfrissítés helyett navigálj vissza az eseménylistára és újra be az eseménybe.
 
-Elvárt: a lista és a kiadások megjelennek, felül az „Offline — utoljára frissítve: …" sáv, az Elszámolás fül pedig kiírja, hogy offline számolt.
+Elvárt: a lista és a kiadások megjelennek, felül az „Offline — utoljára frissítve: …" sáv, és az Elszámolás fül a cache-elt kiadásokból számolt egyenlegeket mutatja.
 
 Kapcsold vissza a hálózatot. Elvárt: a következő betöltés után a sáv eltűnik.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add apps/web/src/offline/cache.js apps/web/src/components/OfflineBanner.vue apps/web/src/stores/events.js apps/web/src/stores/people.js apps/web/src/stores/expenses.js apps/web/src/App.vue apps/web/src/components/SettlementPanel.vue
-git commit -m "feat(web): offline olvasás cache-ből és offline elszámolás"
+git add apps/web/src/offline/cache.js apps/web/src/components/OfflineBanner.vue apps/web/src/stores/events.js apps/web/src/stores/people.js apps/web/src/stores/expenses.js apps/web/src/App.vue
+git commit -m "feat(web): offline olvasás cache-ből"
 ```
 
 ---
@@ -988,17 +930,37 @@ Modulszintű segédfüggvény a fájl tetején, az `insertIndexFor` mellé:
  * @returns {object}
  */
 function toPendingExpense(entry) {
+  const { amountMinor, currency, exchangeRate } = entry.payload;
   return {
     ...entry.payload,
     id: `pending:${entry.id}`,
     eventId: entry.eventId,
     date: new Date(entry.payload.date),
-    baseAmountMinor: entry.payload.amountMinor,
+    // Ugyanaz a számítás, amit a szerver `buildExpenseData`-ja végez — csak
+    // (deviza esetén) a felvitelkor ismert, esetleg cache-elt árfolyammal.
+    // NE a nyers `amountMinor` kerüljön ide: az elszámolás ebből a listából
+    // számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná el az
+    // egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől el.
+    baseAmountMinor:
+      currency === SETTLEMENT_CURRENCY
+        ? amountMinor
+        : convertMinorAmount({
+            amountMinor,
+            rate: exchangeRate,
+            sourceCurrency: currency,
+            targetCurrency: SETTLEMENT_CURRENCY,
+          }),
     createdAt: entry.createdAt,
     updatedAt: entry.createdAt,
     pending: true,
   };
 }
+```
+
+A store importjaihoz ehhez kell a két shared helper:
+
+```js
+import { convertMinorAmount, SETTLEMENT_CURRENCY } from '@filler/shared';
 ```
 
 A `baseAmountMinor` itt szándékosan a nyers összeg: devizás kiadásnál csak becslés, a végleges értéket a szerver számolja a feltöltéskor. A felület ezért `≈` jelzéssel mutatja (lásd Step 4).
@@ -1026,15 +988,21 @@ A `baseAmountMinor` itt szándékosan a nyers összeg: devizás kiadásnál csak
     },
 ```
 
-`apps/web/src/components/ExpenseTable.vue` — az `onMounted`-ben a `fetchExpenses` után:
+`apps/web/src/views/EventDetailView.vue` — **nem** az `ExpenseTable`-ben: az
+élő-frissítés kör áthelyezte a feliratkozást és a kiadás-betöltést ide, hogy
+mindkét fülön éljen. A `loadPending` ugyanoda tartozik, a `fetchExpenses`
+**után**, különben a lista betöltése felülírná a függőben lévő sorokat:
 
 ```js
-expensesStore.fetchExpenses(props.event.id).then(() => {
-  return expensesStore.loadPending(props.event.id);
+expensesStore.fetchExpenses(route.params.id).then(() => {
+  return expensesStore.loadPending(route.params.id);
 });
 ```
 
-Ha az `onMounted` jelenlegi alakja nem promise-láncot használ, alakítsd át úgy, hogy a `loadPending` a `fetchExpenses` **után** fusson — különben a lista betöltése felülírná a függőben lévő sorokat.
+Figyelj a `promise/catch-or-return` és a `promise/always-return` szabályra: a
+lánc `return`-öl a `.then`-ben, és kap egy `.catch`-et, ami — a
+`fetchExpenses` mintájára — csendben elnyeli a hibát, mert a store már
+beállította a saját `error` állapotát.
 
 - [ ] **Step 4: Jelöld a függőben lévő sorokat**
 
@@ -1071,7 +1039,34 @@ Ellenőrizd a fájl tényleges sorszerkezetét (asztali táblázat és mobil ká
 }
 ```
 
-- [ ] **Step 5: Ellenőrzés — online felvitel változatlan**
+- [ ] **Step 5: Az elszámolás jelezze, hogy függőben lévő elemet is számol**
+
+Az élő-frissítés kör óta a `apps/web/src/components/SettlementPanel.vue`
+közvetlenül a `expensesStore.expenses` listából számol — tehát a függőben lévő
+kiadások **automatikusan beleszámítanak** az egyenlegekbe. Ez a kívánt
+viselkedés (különben az offline felvitt kiadás némán kimaradna), de a
+felhasználónak tudnia kell róla.
+
+A `<script setup>`-ba:
+
+```js
+const hasPendingExpense = computed(() => {
+  return expensesStore.expenses.some((expense) => expense.pending === true);
+});
+```
+
+A `<template>`-ben, a „Ki fizet kinek" felirat **fölé**:
+
+```html
+<p v-if="hasPendingExpense" class="settlement__status">
+  Az elszámolás még fel nem töltött kiadást is tartalmaz. A devizás összegek a felvitelkori
+  árfolyammal becsültek — a végleges érték a feltöltéskor dől el.
+</p>
+```
+
+A `settlement__status` osztály már létezik a fájlban; ne vezess be új stílust.
+
+- [ ] **Step 6: Ellenőrzés — online felvitel változatlan**
 
 ```bash
 npm run lint
@@ -1081,16 +1076,16 @@ docker compose up -d --build
 
 Böngészőben vegyél fel egy kiadást. Elvárt: azonnal megjelenik, **nincs** rajta „függőben" jelzés, a másik fülön is megjelenik.
 
-- [ ] **Step 6: Ellenőrzés — offline felvitel sorbanáll**
+- [ ] **Step 7: Ellenőrzés — offline felvitel sorbanáll**
 
 Kapcsold be a DevTools „Offline" módot, vegyél fel egy kiadást. Elvárt: a modal bezárul, a sor megjelenik „függőben" jelzéssel, művelet-gombok nélkül. A DevTools → Application → IndexedDB → `filler-offline` → `outbox` alatt látszik egy `pending` bejegyzés.
 
 Tölts újra (még offline). Elvárt: a függőben lévő sor a cache-elt lista mellett újra megjelenik.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/web/src/offline/outbox.js apps/web/src/stores/expenses.js apps/web/src/components/ExpenseTable.vue
+git add apps/web/src/offline/outbox.js apps/web/src/stores/expenses.js apps/web/src/views/EventDetailView.vue apps/web/src/components/ExpenseTable.vue apps/web/src/components/SettlementPanel.vue
 git commit -m "feat(web): offline kiadás-írás outbox sorbanállítással"
 ```
 
@@ -1122,7 +1117,6 @@ npm install -w @filler/web @capacitor/network@latest
 
 ```js
 import { Network } from '@capacitor/network';
-import { App as CapacitorApp } from '@capacitor/app';
 import { expenseResponseSchema, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { listEntries, markFailed, refreshCounts, removeEntry } from './outbox.js';
@@ -1236,13 +1230,16 @@ export async function startAutoSync() {
     }
   });
 
-  if (isNativeApp()) {
-    await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) {
-        syncOutbox().catch(() => {});
-      }
-    });
-  }
+  // Előtérbe kerüléskor is szinkronizálunk. Szándékosan `visibilitychange`,
+  // nem a `@capacitor/app` `appStateChange`-e: az élő-frissítés kör óta a
+  // stream újrakapcsolódása és a pótló újratöltés is ezen az eseményen áll
+  // (lásd `apps/web/src/stores/expenses.js`), és két párhuzamos
+  // előtérbe-kerülés-mechanizmus csak széttartani tudna.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncOutbox().catch(() => {});
+    }
+  });
 
   await syncOutbox();
 }

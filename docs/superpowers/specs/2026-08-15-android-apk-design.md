@@ -141,6 +141,21 @@ visszaadása).
 
 A `clientId` opcionális marad, hogy a webes kliens változatlanul működjön.
 
+### Függőben lévő kiadás és az elszámolás
+
+Az élő-frissítés kör (`docs/superpowers/specs/2026-08-20-elo-frissites-design.md`)
+óta az elszámolás panel a betöltött kiadáslistából számol, saját kérés nélkül.
+Ennek két következménye az offline írásra:
+
+- Az „offline elszámolás" külön mechanizmus nélkül megvan: amint a kiadáslista a
+  cache-ből jön, az elszámolás is offline működik.
+- A sorbanállított kiadás **beleszámít** az egyenlegekbe (döntés: enélkül az
+  offline felvitt kiadás némán kimaradna az elszámolásból). Ezért a függőben
+  lévő elem forintos értékét ugyanazzal a `convertMinorAmount`-tal kell
+  kiszámolni, amit a szerver használ — a felvitelkor ismert (esetleg cache-elt)
+  árfolyammal, **nem** a nyers összeggel. A panel jelzi, ha az elszámolás fel
+  nem töltött elemet is tartalmaz, és hogy a devizás összegek becsültek.
+
 ### Devizás kiadás offline
 
 Az árfolyam-végpont csak aktuális árfolyamot ad, offline pedig nincs mit
