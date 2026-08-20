@@ -18,6 +18,14 @@ let visibilityHandler = null;
 const freshTimers = new Map();
 
 /**
+ * A legutóbb kért esemény azonosítója a `fetchExpenses`-hez. Egy nagyon
+ * gyors, egymást követő navigáció esetén a korábbi kérés válasza később is
+ * megérkezhet, mint a következőé — enélkül az a lista beleírna egy másik
+ * esemény nézetébe.
+ */
+let latestFetchEventId = null;
+
+/**
  * A szerverrel azonos rendezés: dátum szerint csökkenő, egyező dátumon a
  * később rögzített előbb (lásd expenseRepository.listForEvent).
  * @param {{ date: Date, createdAt: Date }} a
@@ -55,14 +63,27 @@ export const useExpensesStore = defineStore('expenses', {
     async fetchExpenses(eventId) {
       this.loading = true;
       this.error = null;
+      latestFetchEventId = eventId;
       try {
-        this.expenses = await apiClient.get(`/events/${eventId}/expenses`, {
+        const expenses = await apiClient.get(`/events/${eventId}/expenses`, {
           schema: expenseListResponseSchema,
         });
+        if (latestFetchEventId !== eventId) {
+          // Közben egy másik eseményre navigáltunk, és az a hívás már
+          // felülírta, melyik esemény számít „aktuálisnak” — ez a válasz
+          // elkésett, nem írhatja felül egy másik esemény listáját.
+          return;
+        }
+        this.expenses = expenses;
       } catch (error) {
+        if (latestFetchEventId !== eventId) {
+          return;
+        }
         this.error = error;
       } finally {
-        this.loading = false;
+        if (latestFetchEventId === eventId) {
+          this.loading = false;
+        }
       }
     },
 
@@ -80,6 +101,9 @@ export const useExpensesStore = defineStore('expenses', {
         this.expenses = await apiClient.get(`/events/${eventId}/expenses`, {
           schema: expenseListResponseSchema,
         });
+        // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
+        // sikeres csendes frissítés a bizonyíték, hogy a kapcsolat helyreállt.
+        this.error = null;
       } catch {
         // Csendben bukik is: a látható (elavult) lista többet ér egy
         // hibaüzenetnél, és a következő újratöltés helyrehozza.
@@ -152,6 +176,10 @@ export const useExpensesStore = defineStore('expenses', {
       freshTimers.clear();
       this.freshIds.clear();
       this.connected = false;
+      // Enélkül az előző esemény kiadásai látszódnának a következő esemény
+      // nézetén, amíg annak `fetchExpenses`-e le nem fut.
+      this.expenses = [];
+      this.error = null;
     },
 
     /**
