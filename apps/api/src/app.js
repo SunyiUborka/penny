@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { buildLoggerOptions } from './config/logger.js';
+import { NATIVE_APP_ORIGINS } from './config/cors.js';
 import mongoPlugin from './plugins/mongo.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import healthRoutes from './routes/health.js';
@@ -37,7 +38,10 @@ export async function buildApp(env) {
 
   await app.register(errorHandlerPlugin);
   await app.register(cookie, { secret: env.SESSION_SECRET });
-  await app.register(cors, { origin: false, credentials: true });
+  // `origin: false` helyett szűk lista: a böngészős kérések same-origin
+  // mennek (nekik nem kell CORS), a natív app streamje viszont a WebView
+  // origójáról érkezik. A hitelesítés ott fejléces tokennel történik.
+  await app.register(cors, { origin: NATIVE_APP_ORIGINS, credentials: true });
   await app.register(rateLimit, { global: false });
 
   await app.register(mongoPlugin, { mongoUrl: env.MONGO_URL });
