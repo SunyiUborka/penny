@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A más eszközön történt kiadás-változás azonnal megjelenjen a natív Android appban is (nem csak böngészőben), az elszámolás magától követze a kiadásokat, és az eseménylista lehúzásra frissíthető legyen.
+**Goal:** A más eszközön történt kiadás-változás azonnal megjelenjen a natív Android appban is (nem csak böngészőben), az elszámolás magától kövesse a kiadásokat, és az eseménylista lehúzásra frissíthető legyen.
 
 **Architecture:** Egy új transzport-modul (`apps/web/src/api/eventStream.js`) elrejti, hogy a platform `EventSource`-szal (böngésző) vagy a Capacitor által megtartott, nem patchelt `fetch`-fel (natív app, `Authorization: Bearer` fejléccel) streamel. A kiadás-feliratkozás a fül-komponensből feljebb, az esemény-nézetbe kerül, hogy mindkét fülön éljen; az elszámolás panel innentől nem kér le semmit, hanem a betöltött kiadáslistából számol ugyanazzal a `computeSettlement`-tel, amit a backend használ.
 
