@@ -51,35 +51,68 @@ function insertIndexFor(expenses, expense) {
 }
 
 /**
- * A sorbanállított kiadás listában megjelenítendő alakja. Az `id` prefixe
- * megkülönbözteti a szervertől kapott kiadásoktól, a `pending` jelzőt pedig a
- * felület használja.
+ * Ugyanaz a számítás, amit a szerver `buildExpenseData`-ja végez — csak
+ * (deviza esetén) a felvitelkor/szerkesztéskor ismert, esetleg cache-elt
+ * árfolyammal. NE a nyers `amountMinor` kerüljön a listába: az elszámolás
+ * ebből a listából számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná el
+ * az egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől el.
+ *
+ * Ezt hívja mind a létrehozás (`toPendingExpense`), mind a szerkesztés
+ * (`toPendingUpdate`) sorbaállított alakja — egy helyen, hogy a két út ne
+ * csúszhasson szét a forint-átváltás számításában.
+ * @param {{ amountMinor: number, currency: string, exchangeRate: string }} payload
+ * @returns {number}
+ */
+function computePendingBaseAmountMinor({ amountMinor, currency, exchangeRate }) {
+  return currency === SETTLEMENT_CURRENCY
+    ? amountMinor
+    : convertMinorAmount({
+        amountMinor,
+        rate: exchangeRate,
+        sourceCurrency: currency,
+        targetCurrency: SETTLEMENT_CURRENCY,
+      });
+}
+
+/**
+ * A sorbanállított, újonnan létrehozott kiadás listában megjelenítendő
+ * alakja. Az `id` prefixe megkülönbözteti a szervertől kapott kiadásoktól, a
+ * `pending` jelzőt pedig a felület használja.
  * @param {object} entry outbox bejegyzés
  * @returns {object}
  */
 function toPendingExpense(entry) {
-  const { amountMinor, currency, exchangeRate } = entry.payload;
   return {
     ...entry.payload,
     id: `pending:${entry.id}`,
     eventId: entry.eventId,
     date: new Date(entry.payload.date),
-    // Ugyanaz a számítás, amit a szerver `buildExpenseData`-ja végez — csak
-    // (deviza esetén) a felvitelkor ismert, esetleg cache-elt árfolyammal.
-    // NE a nyers `amountMinor` kerüljön ide: az elszámolás ebből a listából
-    // számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná el az
-    // egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől el.
-    baseAmountMinor:
-      currency === SETTLEMENT_CURRENCY
-        ? amountMinor
-        : convertMinorAmount({
-            amountMinor,
-            rate: exchangeRate,
-            sourceCurrency: currency,
-            targetCurrency: SETTLEMENT_CURRENCY,
-          }),
+    baseAmountMinor: computePendingBaseAmountMinor(entry.payload),
     createdAt: entry.createdAt,
     updatedAt: entry.createdAt,
+    pending: true,
+  };
+}
+
+/**
+ * Egy meglévő (szinkronizált vagy már pending) kiadásra alkalmazott,
+ * sorbaállított szerkesztés listában megjelenítendő alakja. A forint-érték itt
+ * is `computePendingBaseAmountMinor`-ral számol, nem a régi (vagy nyers)
+ * összegből marad bent — így egy devizás szerkesztés is helyesen látszik az
+ * elszámolásban a feltöltésig.
+ * @param {object} existing a listában lévő kiadás
+ * @param {object} payload a szerkesztés bemenete (`ExpenseModal` alakja)
+ * @returns {object}
+ */
+function toPendingUpdate(existing, payload) {
+  return {
+    ...existing,
+    ...payload,
+    // A `date` az űrlapról (és az outbox payload-ból) ÉÉÉÉ-HH-NN string, a
+    // listában viszont Date — a rendezés (compareExpenses) getTime()-ot hív
+    // rá.
+    date: new Date(payload.date),
+    baseAmountMinor: computePendingBaseAmountMinor(payload),
     pending: true,
   };
 }
@@ -138,6 +171,16 @@ export const useExpensesStore = defineStore('expenses', {
       for (const entry of entries) {
         if (entry.type === 'create') {
           this.upsertExpense(toPendingExpense(entry));
+        }
+        if (entry.type === 'update' && entry.expenseId) {
+          const existing = this.expenses.find((expense) => expense.id === entry.expenseId);
+          // Ha a célkiadás nincs (még) a listában — másutt törölték, vagy a
+          // lista még nem töltötte be —, nem találunk ki egy sort a
+          // semmiből: a feltöltés (és a szinkron képernyő) dönti majd el, mi
+          // legyen ezzel a bejegyzéssel.
+          if (existing) {
+            this.upsertExpense(toPendingUpdate(existing, entry.payload));
+          }
         }
         if (entry.type === 'delete' && entry.expenseId) {
           this.removeExpense(entry.expenseId);
@@ -360,9 +403,7 @@ export const useExpensesStore = defineStore('expenses', {
           payload: input,
         });
         if (existing) {
-          // A `date` az űrlapról ÉÉÉÉ-HH-NN string, a listában viszont Date —
-          // a rendezés (compareExpenses) getTime()-ot hív rá.
-          this.upsertExpense({ ...existing, ...input, date: new Date(input.date), pending: true });
+          this.upsertExpense(toPendingUpdate(existing, input));
         }
         return null;
       }
