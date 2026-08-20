@@ -111,7 +111,8 @@ Fontos: az Android a telepítéskori ikont eltárolja, tehát egy ikoncsere csak
 A PWA (lásd fentebb) mellett natív Android APK is készíthető a
 [Capacitor](https://capacitorjs.com/) segítségével (`apps/mobile`). A kettő
 egymás mellett létezik, nem egymást helyettesítik: az APK-nak natív share és
-Bearer token alapú hitelesítés jár, cserébe nincs benne SSE (lásd lentebb).
+Bearer token alapú hitelesítés jár, és az élő kiadás-frissítés (SSE) is
+megy benne, csak más transzporton, mint a böngészőben (lásd lentebb).
 
 ### Fejlesztői környezet
 
@@ -197,8 +198,14 @@ adatok közé.
 
 ### Amit a natív app másképp csinál, mint a PWA
 
-- Nincs SSE: a kiadáslista akkor frissül, amikor az app előtérbe kerül,
-  vagy amikor a felhasználó lehúzza a listát (pull-to-refresh).
+- Az élő kiadás-frissítés más transzporton megy: a böngésző `EventSource`-a
+  helyett a natív, patchelt `fetch` (`window.CapacitorWebFetch`) olvassa a
+  streamet Bearer tokennel, mert az `EventSource` nem tud `Authorization`
+  fejlécet küldeni, a Capacitor-patchelt `fetch` pedig nem streamel. Az
+  újrakapcsolódás (növekvő várakozással) és a heartbeat-figyelés is a
+  kliens dolga, nem a böngészőé — lásd `docs/ARCHITECTURE.md` 9.1.
+- Lehúzásos frissítés (pull-to-refresh) van az eseménylistán — böngészőben
+  erre nincs szükség, ott az oldal újratöltése a megszokott mozdulat.
 - Natív megosztás (`@capacitor/share`) van bekötve az Elszámolás fülön.
 - Az ikonokat nem a `scripts/generate-icons.js` állítja elő közvetlenül: a
   `@capacitor/assets` generálja belőlük az Android ikon- és

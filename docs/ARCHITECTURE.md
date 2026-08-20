@@ -434,19 +434,21 @@ maga is hibát dobna fejlesztéskor.
 | `PATCH`  | `/api/expenses/:id`          | ✓       | Kiadás szerkesztése                             |
 | `DELETE` | `/api/expenses/:id`          | ✓       | Kiadás törlése                                  |
 | `GET`    | `/api/events/:id/stream`     | ✓       | Élő kiadás-frissítés (SSE), lásd 9.1            |
-| `GET`    | `/api/events/:id/settlement` | ✓       | Egyenlegek + minimalizált utalás-lista          |
+| `GET`    | `/api/events/:id/settlement` | ✓       | Egyenlegek + minimalizált utalás-lista¹         |
 | `GET`    | `/api/rates?from=&to=`       | ✓       | Árfolyam lekérése (cache-elt vagy élő)          |
 | `GET`    | `/health`                    | –       | Health check (Docker healthcheck-hez)           |
+
+¹ A frontend ma nem hívja: a `SettlementPanel` a betöltött kiadáslistából,
+helyben számol a `computeSettlement`-tel (`packages/shared`) — ugyanazzal a
+függvénnyel, amit ez a végpont is használ. A végpont API-teljesség
+végett maradt meg, nem hívatlanul elfelejtve.
 
 ### 9.1 Élő kiadás-frissítés (SSE)
 
 Ha többen néznek egy eseményt (közös utazáson tipikusan mindenki a saját
 telefonján), a más eszközön felvitt kiadás oldalfrissítés nélkül megjelenik.
 A csatorna **egyirányú** (szerver → kliens), ezért Server-Sent Events, nem
-WebSocket: sima HTTP-n megy, a böngésző `EventSource`-a magától
-újrakapcsolódik, és a session cookie same-origin kérésként átmegy — a
-hitelesítést a védett `/api` prefix `requireAuth` hookja adja, extra kód
-nélkül.
+WebSocket, sima HTTP-n megy.
 
 ```
 POST/PATCH/DELETE ─► expenseService ──► expenseRepository (Mongo)
@@ -457,7 +459,7 @@ POST/PATCH/DELETE ─► expenseService ──► expenseRepository (Mongo)
                           │
 GET /api/events/:id/stream ◄┘
                           │
-              EventSource ─► expensesStore ─► ExpenseTable
+      EventDetailView ─► openEventStream ─► expensesStore ─► ExpenseTable
 ```
 
 A pub/sub (`apps/api/src/services/eventBus.js`) szándékosan **memóriában** van,
@@ -475,10 +477,52 @@ Két dolog kell ahhoz, hogy a stream a `web` szerver proxyján át is éljen:
 headersTimeout: 0 }` beállítása (`apps/web/server.js`) — különben az undici
 alapértelmezett időkorlátja elvágja a hosszan élő választ.
 
+**Platformfüggetlen transzport** (`apps/web/src/api/eventStream.js`,
+`openEventStream`): a kliens oldal két megvalósítást takar egy közös felület
+mögé.
+
+- **Böngésző**: `EventSource`, same-origin kérés. A hitelesítést a httpOnly
+  session cookie adja, az újrakapcsolódás a böngészőé (a szerver `retry:
+5000` mezője szerint).
+- **Natív Android app**: az `EventSource` nem tud `Authorization` fejlécet
+  küldeni, a `CapacitorHttp` által patchelt globális `fetch` pedig nem
+  streamel — ezért az eredeti, Capacitor által eltárolt `window.
+CapacitorWebFetch`-fel olvassuk a streamet, Bearer tokennel, és az
+  újrakapcsolódás a kliens dolga: növekvő várakozással (1 mp-től 30 mp-ig
+  duplázódva), amit egy `ATTEMPT_RESET_MS` (3 mp) él kapcsolat nulláz —
+  különben egy kérést elfogadó, majd rögtön EOF-oló szerver a számlálót
+  minden körben nullázná. Egy **heartbeat-figyelő** (45 mp, a szerver 20
+  mp-es pingjének több mint duplája) megszakítja a kapcsolatot, ha se
+  üzenet, se ping nem érkezik — ez fogja el a félig nyitva ragadt socketet,
+  amit a hálózat szintjén sosem venne észre a `reader.read()`. A 401/403
+  (lejárt token) és a 404 (törölt esemény) válasz **terminális**: nincs
+  értelme ugyanazzal a hitelesítő adattal vagy egy soha meg nem nyíló
+  streamre örökké próbálkozni.
+  A natív build API-alapcíme fordítási időben rögzített, abszolút URL
+  (lásd az Android APK fejezetet a README-ben) — emiatt a natív stream-kérés
+  **cross-origin**, tehát a böngészőmotor CORS-preflighttal kezeli, szemben a
+  böngészős `EventSource` same-origin kérésével.
+
+**CORS a hijackolt válaszon:** a stream route `reply.hijack()`-kel kerüli meg
+a normál `send()`/`onSend` folyamatot, tehát a `@fastify/cors` plugin által
+`reply.header(...)`-rel csak eltárolt fejlécek (`app.js`,
+`NATIVE_APP_ORIGINS` egy szűk, fix lista) sosem jutnának ki a socketre — a
+natív kérés válasz nélkül elutasítva végződne. A stream route
+(`apps/api/src/routes/events.js`) ezért kézzel írja ki ugyanazt, amit a
+plugin tenne: `apps/api/src/config/cors.js` egyetlen `corsHeadersFor(origin)`
+függvénye dönti el, mely origin engedélyezett, hogy ez a döntés ne
+csúszhasson szét a plugin-regisztrációtól. Nincs `Access-Control-Allow-
+Credentials`: a natív kérés nem cookie-val hitelesít, hanem fejléces
+tokennel, és `credentials` opció nélkül megy, tehát a böngésző sosem nézi meg
+ezt a fejlécet rajta.
+
 **Elmaradt üzenetek:** nincs szerveroldali `Last-Event-ID` puffer. Helyette a
 store újrakapcsolódáskor és a fül előtérbe kerülésekor csendben (a
 „Betöltés…" jelző felvillantása nélkül) újratölti a teljes listát. Ez minden
 szakadás után garantáltan konzisztens állapotot ad, jóval kevesebb kóddal.
+Ugyanezért az `EventDetailView` az esemény dokumentumát (a résztvevőlistát)
+is csendben újratölti újrakapcsolódáskor és előtérbe kerüléskor — ez az
+elszámolás-számítás bemenete, és enélkül elavulhatna.
 
 A kliens oldali beszúrás idempotens: a saját mutáció után ugyanaz a kiadás az
 SSE-n is visszajön, ezért az `upsertExpense` azonos `id`-re cserél, nem
