@@ -21,8 +21,6 @@ const pullRatio = ref(0);
 let detachPullToRefresh = null;
 
 onMounted(async () => {
-  await Promise.all([eventsStore.fetchEvents(), peopleStore.fetchPeople()]);
-
   // A lehúzásos gesztus natív affordance: böngészőben nincs rá szükség, ott
   // az oldal újratöltése a megszokott mozdulat.
   if (isNativeApp()) {
@@ -33,6 +31,8 @@ onMounted(async () => {
       },
     });
   }
+
+  await Promise.all([eventsStore.fetchEvents(), peopleStore.fetchPeople()]);
 });
 
 onUnmounted(() => {
