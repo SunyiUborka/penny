@@ -29,8 +29,11 @@ onMounted(() => {
   expensesStore.fetchExpenses(props.event.id);
 
   // A lehúzásos gesztus natív affordance, nem az SSE hiányának a
-  // helyettesítője — böngészőben ne kapjon touch-gesztust, ott ehelyett az
-  // egérrel is használható kapcsolatjelző jelzi az élő frissítés állapotát.
+  // helyettesítője — böngészőben nincs touch-gesztus, ott a kapcsolatjelző
+  // (ami egy passzív státuszfelirat, nem kezelőelem) csak azt mutatja, él-e
+  // épp a lista frissítése. Ha az `isNativeApp()` kapunak a jövőben egy
+  // másik (nem natív) oka is lenne a hamis értékre, az se kapjon
+  // böngészőben touch-gesztust.
   if (isNativeApp()) {
     detachPullToRefresh = attachPullToRefresh({
       onRefresh: () => expensesStore.refreshQuietly(props.event.id),
