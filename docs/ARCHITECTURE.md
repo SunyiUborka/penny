@@ -678,10 +678,13 @@ változatlan tartalommal, újraküldve is ugyanígy elbukna-e — ha a válasz
 
 Egy elakadt tétel önmagától sosem próbálkozik újra — ez a Szinkronizálás
 képernyő (`/sync`, `SyncView.vue`) dolga, ami csak akkor jelenik meg a
-navigációban, ha van várakozó vagy elakadt elem. A képernyő tételenkénti
-„Újra” és „Eldobás” műveletet kínál (az eldobás megerősítése megnevezi a
-konkrét tételt), és a „Feltöltés most” gomb becsületesen jelzi, ha a nyomás
-azért nem csinált semmit, mert egy háttérbeli szinkron már éppen folyt.
+navigációban, ha van várakozó vagy elakadt elem. A képernyő minden tételt
+listáz, de a tételenkénti „Újra” és „Eldobás” műveletet csak a `failed`
+státuszú (elakadt) tételekre kínálja fel — egy még csak várakozó (`pending`)
+tétel nem szerkeszthető és nem is dobható el, csak várni lehet rá, amíg fel
+nem töltődik vagy el nem akad. Az eldobás megerősítése megnevezi a konkrét
+tételt, a „Feltöltés most” gomb pedig becsületesen jelzi, ha a nyomás azért
+nem csinált semmit, mert egy háttérbeli szinkron már éppen folyt.
 
 ## 11. Hibakezelés
 

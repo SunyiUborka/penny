@@ -209,8 +209,9 @@ aktív, IndexedDB-re épül.
   állapotukban; a felület egy halk sávval jelzi, hogy „Offline — utoljára
   frissítve: …”.
 - Kiadás felvehető, módosítható, törölhető. A sorbanállított tétel a listában
-  „függőben” jelzéssel jelenik meg, és nem szerkeszthető — egy szerkesztés a
-  szinkron képernyőn, a feltöltés utáni valódi kiadáson végezhető el.
+  „függőben” jelzéssel jelenik meg, és nem szerkeszthető, amíg fel nem
+  töltődött — a szerkesztés a szervertől kapott valódi kiadás-azonosítóra
+  támaszkodik, ami egy még függőben lévő sornak nincs.
 - Az Elszámolás fül offline is számol, mert a betöltött (és a még
   sorbanálló) kiadáslistából dolgozik — a fel nem töltött tételek **is**
   beleszámítanak az egyenlegekbe, a devizás sorok forint-értéke pedig a
@@ -241,8 +242,56 @@ várakozó állapotban hagyja a következő próbálkozásig.
 
 **Fontos korlát:** az app törlése (vagy egy aláíráscsere miatti kényszerű
 újratelepítés, lásd fentebb) a még fel nem töltött, sorbanállított
-módosításokat is véglegesen elviszi — ezeket érdemes feltölteni (vagy a
-Szinkronizálás képernyőn eldobni), mielőtt egy ilyen lépésre sor kerülne.
+módosításokat is véglegesen elviszi — ezeket érdemes előbb feltölteni
+(kapcsolódva a hálózathoz), mielőtt egy ilyen lépésre sor kerülne.
+
+### Eszközös ellenőrzés — offline forgatókönyv
+
+Az offline réteg fejlesztése alatt **nem volt csatlakoztatott telefon és
+böngésző sem**, ezért a fenti viselkedés egyetlen sora sem futott le éles
+eszközön: a bizonyíték kódolvasás és sikeres buildek. Az alábbi sorrend a
+legerősebb bizonyítékkal kezd — ami itt elbukik, az a legtöbb feltevést dönti
+meg.
+
+- [ ] **Offline olvasás egyáltalán működik-e.** Online állapotban nyiss meg
+      egy eseményt (ez tölti fel a cache-t), kapcsolj repülő üzemmódba, majd
+      navigálj el és vissza (vagy indítsd újra az appot). Bizonyíték: a
+      kiadáslista a legutóbbi állapotában megjelenik, és felül látszik az
+      „Offline — utoljára frissítve: …” sáv. Ha itt üres lista vagy hibaüzenet
+      jön, a `apps/web/src/offline/cache.js` `fetchWithCache`-e vagy maga az
+      IndexedDB-hozzáférés hibás, és az alábbi pontok nagy része értelmetlen.
+- [ ] **Offline írás és perzisztencia újraindítás után.** Még repülő
+      üzemmódban vegyél fel egy forintos és egy EUR-os kiadást, majd zárd be
+      teljesen az appot (ne csak háttérbe küldd), és indítsd újra — továbbra
+      is offline. Bizonyíték: mindkét sor „függőben” jelzéssel újra megjelenik
+      (az `outbox` IndexedDB store túlélte az újraindítást), az EUR-os sor
+      becsült árfolyammal (`≈`) számolt forint-értéket mutat, és egyik sor sem
+      nyitható szerkesztésre kattintással.
+- [ ] **Offline elszámolás.** Ugyanebben az állapotban nyisd meg az
+      Elszámolás fület. Bizonyíték: az egyenlegek és az utalás-lista a két
+      függőben lévő kiadást is figyelembe veszi, és megjelenik a „még fel nem
+      töltött kiadást is tartalmaz” figyelmeztetés.
+- [ ] **Szinkronizálás visszatéréskor, duplikáció nélkül.** Kapcsold ki a
+      repülő üzemmódot, hozd előtérbe az appot. Bizonyíték: a „függőben”
+      jelzések eltűnnek, a Szinkronizálás menüpont eltűnik a navigációból, és
+      — ez a legfontosabb — egy böngészőből frissítve a listát **pontosan
+      egy-egy példány** létezik mindkét kiadásból, nem kettő. Duplikáció
+      esetén a `clientId`-alapú idempotencia (backend
+      `expenseService.createExpense`) vagy a kliens `enqueue`-ja hibás — ez a
+      legsúlyosabb lehetséges hiba, mert csendes adatduplikációt jelentene.
+- [ ] **Végleges (nem becsült) árfolyam.** Az imént feltöltött EUR-os
+      kiadáson ellenőrizd (böngészőből megnyitva a szerkesztő modalt, vagy a
+      Mongo adatbázisban) a `rateFetchedAt` értékét: a feltöltés
+      időpontjához közelinek kell lennie, nem a felvitel (repülő üzemmód
+      alatti) időpontjához. Ez bizonyítja, hogy a szinkron-motor ténylegesen
+      újra lekérte az árfolyamot feltöltéskor, nem a becsült értéket küldte
+      el véglegesként.
+- [ ] **Elakadt tétel kezelése.** Idézz elő egy végleges szerver-elutasítást
+      (pl. vegyél fel egy kiadást offline egy eseményhez, majd töröld azt az
+      eseményt egy másik eszközről/böngészőből, mielőtt a feltöltés lefutna).
+      Bizonyíték: a tétel a Szinkronizálás képernyőn „Elakadt” jelzéssel és a
+      szerver hibaüzenetével jelenik meg, „Újra” és „Eldobás” gombbal
+      kezelhető, és önmagától nem próbálkozik újra.
 
 ### Amit a natív app másképp csinál, mint a PWA
 
