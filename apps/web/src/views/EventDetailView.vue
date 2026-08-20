@@ -106,7 +106,15 @@ onMounted(() => {
   // Feliratkozás ELŐBB, mint a lista betöltése: így a két művelet közben
   // felvitt kiadás sem maradhat le.
   expensesStore.subscribe(route.params.id);
-  expensesStore.fetchExpenses(route.params.id);
+  expensesStore
+    .fetchExpenses(route.params.id)
+    .then(() => {
+      return expensesStore.loadPending(route.params.id);
+    })
+    .catch(() => {
+      // Csendben bukik is, a `fetchExpenses` mintájára: a store már
+      // beállította a saját `error` állapotát, itt nincs mit tenni.
+    });
 
   load();
 
