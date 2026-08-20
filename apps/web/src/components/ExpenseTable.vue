@@ -19,6 +19,7 @@ const showModal = ref(false);
 const editingExpense = ref(null);
 const saving = ref(false);
 const formError = ref('');
+const actionError = ref('');
 const pullRatio = ref(0);
 let detachPullToRefresh = null;
 
@@ -64,7 +65,8 @@ function openEditModal(expense) {
     // Egy még fel nem töltött sor nem szerkeszthető: a szerkesztés a
     // szervertől kapott, valódi kiadás azonosítójára támaszkodik, ami egy
     // pending sornak nincs. A módosítás a szinkron képernyőn kerül majd sorra
-    // (visszavonás + újrafelvitel).
+    // (visszavonás + újrafelvitel) — a sor emiatt eleve nem is kínálja fel
+    // ezt a lehetőséget (lásd a `<tr>` `tabindex`/`title` kötését lent).
     return;
   }
   editingExpense.value = expense;
@@ -94,7 +96,15 @@ async function handleDelete(expense) {
   if (!confirmed) {
     return;
   }
-  await expensesStore.deleteExpense(expense.id);
+  actionError.value = '';
+  try {
+    await expensesStore.deleteExpense(expense.id);
+  } catch (error) {
+    // A `deleteExpense` egy szerver által ténylegesen elutasított törlést
+    // (pl. már törölt kiadás) idedob, nem sorolja be — enélkül ez egy
+    // néma, kezeletlen elutasítás lenne, a felhasználó semmit nem látna.
+    actionError.value = error.message ?? 'Nem sikerült törölni a kiadást.';
+  }
 }
 </script>
 
@@ -128,6 +138,7 @@ async function handleDelete(expense) {
       <button type="button" class="btn btn--primary" @click="openCreateModal">+ Új kiadás</button>
     </div>
 
+    <p v-if="actionError" role="alert" class="expense-table__status">{{ actionError }}</p>
     <p v-if="expensesStore.loading" class="expense-table__status">Betöltés…</p>
     <p v-else-if="expensesStore.error" role="alert" class="expense-table__status">
       Nem sikerült betölteni a kiadásokat.
@@ -157,7 +168,12 @@ async function handleDelete(expense) {
             'is-fresh': expensesStore.freshIds.has(expense.id),
             'is-pending': expense.pending,
           }"
-          tabindex="0"
+          :tabindex="expense.pending ? -1 : 0"
+          :title="
+            expense.pending
+              ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik.'
+              : undefined
+          "
           @click="openEditModal(expense)"
           @keydown.enter="openEditModal(expense)"
         >
@@ -171,7 +187,8 @@ async function handleDelete(expense) {
             {{ formatMoney({ amountMinor: expense.amountMinor, currency: expense.currency }) }}
           </td>
           <td data-label="Alapvaluta" class="align-right money money--credit">
-            {{
+            {{ expense.pending ? '≈ ' : ''
+            }}{{
               formatMoney({ amountMinor: expense.baseAmountMinor, currency: SETTLEMENT_CURRENCY })
             }}
           </td>
@@ -303,9 +320,17 @@ async function handleDelete(expense) {
   cursor: pointer;
 }
 
-/* Hover csak igazi kurzorral: érintésnél beragadna a kiemelés. */
+/* Egy még fel nem töltött sor nem szerkeszthető (lásd `openEditModal`
+   őrfeltétele) — a kurzor és a hover-kiemelés ezt ne ígérje meg. */
+.expense-table__row.is-pending {
+  cursor: default;
+}
+
+/* Hover csak igazi kurzorral, és csak nem-pending soron: érintésnél
+   beragadna a kiemelés, pending soron pedig egy nem elérhető műveletet
+   ígérne. */
 @media (hover: hover) and (pointer: fine) {
-  .expense-table__row:hover {
+  .expense-table__row:not(.is-pending):hover {
     background: var(--forint-soft);
   }
 }
