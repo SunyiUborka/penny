@@ -1,3 +1,4 @@
+import { toPlain } from './plain.js';
 import { getDb, OUTBOX_STORE } from './db.js';
 import { useOfflineStore } from '../stores/offline.js';
 
@@ -23,7 +24,10 @@ export async function enqueue(entry) {
     eventId: entry.eventId,
     expenseId: entry.expenseId ?? null,
     clientId: entry.clientId ?? null,
-    payload: entry.payload ?? null,
+    // `toPlain`: a payload az űrlapról jön, ahol a `sharedWithIds` reaktív
+    // tömb (Vue `Proxy`) — azt az IndexedDB strukturált klónozása nem tudja
+    // lemásolni, és a `put` DataCloneError-ral elhasal. Lásd `offline/plain.js`.
+    payload: entry.payload ? toPlain(entry.payload) : null,
     rateResolvedByForm: entry.rateResolvedByForm ?? false,
     status: 'pending',
     error: null,
