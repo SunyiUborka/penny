@@ -1,11 +1,10 @@
 import { defineStore } from 'pinia';
 import { ZodError } from 'zod';
 import {
-  convertMinorAmount,
+  convertExpenseAmounts,
   expenseListResponseSchema,
   expenseResponseSchema,
   expenseStreamMessageSchema,
-  SETTLEMENT_CURRENCY,
 } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
@@ -72,24 +71,23 @@ function insertIndexFor(expenses, expense) {
  * Ugyanaz a számítás, amit a szerver `buildExpenseData`-ja végez — csak
  * (deviza esetén) a felvitelkor/szerkesztéskor ismert, esetleg cache-elt
  * árfolyammal. NE a nyers `amountMinor` kerüljön a listába: az elszámolás
- * ebből a listából számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná el
- * az egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől el.
+ * ebből a listából számol, tehát egy 10 EUR-os kiadás 10 forintként rontaná
+ * el az egyenlegeket. A végleges érték a feltöltéskor, friss árfolyammal dől
+ * el.
+ *
+ * Tételes számlánál a tételekre is rá kell írni a forint-értéket, mert az
+ * elszámolás bemeneti sémája tételenként megköveteli — enélkül egy függőben
+ * lévő számla az EGÉSZ esemény elszámolását hibaállapotba vinné, amíg a
+ * sorban áll.
  *
  * Ezt hívja mind a létrehozás (`toPendingExpense`), mind a szerkesztés
  * (`toPendingUpdate`) sorbaállított alakja — egy helyen, hogy a két út ne
- * csúszhasson szét a forint-átváltás számításában.
- * @param {{ amountMinor: number, currency: string, exchangeRate: string }} payload
- * @returns {number}
+ * csúszhasson szét.
+ * @param {object} payload a szervernek szánt kiadás-payload
+ * @returns {{ baseAmountMinor: number, items: object[] | undefined }}
  */
-function computePendingBaseAmountMinor({ amountMinor, currency, exchangeRate }) {
-  return currency === SETTLEMENT_CURRENCY
-    ? amountMinor
-    : convertMinorAmount({
-        amountMinor,
-        rate: exchangeRate,
-        sourceCurrency: currency,
-        targetCurrency: SETTLEMENT_CURRENCY,
-      });
+function computePendingAmounts(payload) {
+  return convertExpenseAmounts(payload);
 }
 
 /**
@@ -100,12 +98,14 @@ function computePendingBaseAmountMinor({ amountMinor, currency, exchangeRate }) 
  * @returns {object}
  */
 function toPendingExpense(entry) {
+  const { baseAmountMinor, items } = computePendingAmounts(entry.payload);
   return {
     ...entry.payload,
     id: `pending:${entry.id}`,
     eventId: entry.eventId,
     date: new Date(entry.payload.date),
-    baseAmountMinor: computePendingBaseAmountMinor(entry.payload),
+    baseAmountMinor,
+    ...(items ? { items } : {}),
     createdAt: entry.createdAt,
     updatedAt: entry.createdAt,
     pending: true,
@@ -115,22 +115,29 @@ function toPendingExpense(entry) {
 /**
  * Egy meglévő (szinkronizált vagy már pending) kiadásra alkalmazott,
  * sorbaállított szerkesztés listában megjelenítendő alakja. A forint-érték itt
- * is `computePendingBaseAmountMinor`-ral számol, nem a régi (vagy nyers)
- * összegből marad bent — így egy devizás szerkesztés is helyesen látszik az
+ * is `computePendingAmounts`-szal számol, nem a régi (vagy nyers) összegből
+ * marad bent — így egy devizás szerkesztés is helyesen látszik az
  * elszámolásban a feltöltésig.
  * @param {object} existing a listában lévő kiadás
  * @param {object} payload a szerkesztés bemenete (`ExpenseModal` alakja)
  * @returns {object}
  */
 function toPendingUpdate(existing, payload) {
+  const { baseAmountMinor, items } = computePendingAmounts(payload);
+  // A tételek NEM örökölhetők a régi sorból: egy tételesből egyszerűvé
+  // szerkesztésnél a `...existing` bent hagyná őket, és a lista a helyes
+  // végösszeget mutatná, miközben az elszámolás a megmaradt tételekből
+  // számolna (ugyanaz a csapda, amit a szerveren a `$unset` zár ki).
+  const { items: _previousItems, ...existingWithoutItems } = existing;
   return {
-    ...existing,
+    ...existingWithoutItems,
     ...payload,
     // A `date` az űrlapról (és az outbox payload-ból) ÉÉÉÉ-HH-NN string, a
     // listában viszont Date — a rendezés (compareExpenses) getTime()-ot hív
     // rá.
     date: new Date(payload.date),
-    baseAmountMinor: computePendingBaseAmountMinor(payload),
+    baseAmountMinor,
+    ...(items ? { items } : {}),
     pending: true,
   };
 }

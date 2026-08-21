@@ -35,6 +35,7 @@ const settlement = computed(() => {
         payerId: expense.payerId,
         baseAmountMinor: expense.baseAmountMinor,
         sharedWithIds: expense.sharedWithIds,
+        ...(expense.items ? { items: expense.items } : {}),
       })),
     });
   } catch {
