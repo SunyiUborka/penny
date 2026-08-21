@@ -6,6 +6,10 @@ const { Schema } = mongoose;
 /**
  * Egy számla egy tétele. Nincs saját `_id`-je (`_id: false`): a tételek
  * mindig a kiadással együtt íródnak, önállóan nem hivatkozzuk őket.
+ *
+ * `strict: 'throw'` is kell ide: a Mongoose al-sémák NEM öröklik a szülő
+ * séma `strict` beállítását, tehát enélkül egy ismeretlen kulcs a szülőn
+ * hangosan dobna, a tételen belül viszont csendben eltűnne.
  */
 const expenseItemSchema = new Schema(
   {
@@ -23,7 +27,7 @@ const expenseItemSchema = new Schema(
       ],
     },
   },
-  { _id: false },
+  { _id: false, strict: 'throw' },
 );
 
 const expenseSchema = new Schema(
