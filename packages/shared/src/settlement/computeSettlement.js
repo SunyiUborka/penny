@@ -2,7 +2,8 @@ import { splitEqually } from '../currency/split.js';
 import { computeSettlementInputSchema } from '../schemas/settlement.js';
 
 /**
- * @typedef {{ payerId: string, baseAmountMinor: number, sharedWithIds: string[] }} SettlementExpense
+ * @typedef {{ baseAmountMinor: number, sharedWithIds: string[] }} SettlementPart
+ * @typedef {{ payerId: string, baseAmountMinor: number, sharedWithIds: string[], items?: SettlementPart[] }} SettlementExpense
  * @typedef {{ personId: string, paidMinor: number, owedMinor: number, balanceMinor: number }} Balance
  * @typedef {{ fromId: string, toId: string, amountMinor: number }} Transfer
  */
@@ -16,6 +17,11 @@ import { computeSettlementInputSchema } from '../schemas/settlement.js';
  * személy-azonosító szerinti rendezés biztosítja a determinisztikus kimenetet.
  * Nulla egyenlegű résztvevő nem szerepel transzferben.
  *
+ * Tételes számlánál a felosztás tételenként történik: minden tétel a saját
+ * osztozói között oszlik egyenlően. A fizető „kifizette" oldala változatlanul
+ * a kiadás `baseAmountMinor`-ja — a bemeneti séma követeli meg, hogy ez a
+ * tételek alapösszegeinek összege legyen.
+ *
  * @param {{ participantIds: string[], expenses: SettlementExpense[] }} input
  * @returns {{ balances: Balance[], transfers: Transfer[] }}
  */
@@ -28,12 +34,20 @@ export function computeSettlement(input) {
   for (const expense of expenses) {
     paidMinor.set(expense.payerId, paidMinor.get(expense.payerId) + expense.baseAmountMinor);
 
-    const shares = splitEqually({
-      amountMinor: expense.baseAmountMinor,
-      participantIds: expense.sharedWithIds,
-    });
-    for (const share of shares) {
-      owedMinor.set(share.personId, owedMinor.get(share.personId) + share.shareMinor);
+    // A tétel nélküli kiadás EGY implicit tétel — így nincs két kódág, és a
+    // mai (egyenlő felosztású) viselkedés szó szerint ugyanez a számítás.
+    const parts = expense.items ?? [
+      { baseAmountMinor: expense.baseAmountMinor, sharedWithIds: expense.sharedWithIds },
+    ];
+
+    for (const part of parts) {
+      const shares = splitEqually({
+        amountMinor: part.baseAmountMinor,
+        participantIds: part.sharedWithIds,
+      });
+      for (const share of shares) {
+        owedMinor.set(share.personId, owedMinor.get(share.personId) + share.shareMinor);
+      }
     }
   }
 
