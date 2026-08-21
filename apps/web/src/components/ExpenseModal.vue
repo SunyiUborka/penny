@@ -656,8 +656,10 @@ onUnmounted(() => {
               />
             </template>
             <template v-else>
-              <span class="expense-modal__pseudo-label">Végösszeg</span>
-              <output class="money expense-modal__total">{{ itemsTotalLabel }}</output>
+              <label for="expense-total">Végösszeg</label>
+              <output id="expense-total" class="money expense-modal__total">{{
+                itemsTotalLabel
+              }}</output>
             </template>
           </div>
           <div class="field">
@@ -942,14 +944,6 @@ onUnmounted(() => {
 
 .expense-item__all {
   border-style: dashed;
-}
-
-.expense-modal__pseudo-label {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin-bottom: var(--space-2);
 }
 
 .expense-modal__total {
