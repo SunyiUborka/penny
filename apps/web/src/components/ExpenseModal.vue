@@ -185,13 +185,20 @@ const itemsTotalLabel = computed(() =>
 );
 
 /**
- * Nyitva van-e a tétellista. Bekapcsoláskor (és szerkesztésre nyitott tételes
- * számlánál) nyitva indul — a csukás kézi művelet.
+ * Számlatípus-váltás a fülsávról. A `mode` a két fülnek felel meg:
+ * `'simple'` (egy összeg) és `'itemized'` (tételes).
+ *
+ * A már aktív fül újbóli választása no-op — enélkül egy második kattintás a
+ * „Tételes" fülön eldobná a beírt tételeket és újrakezdené egyetlen üres
+ * sorral.
+ * @param {'simple' | 'itemized'} mode
  */
-const itemsExpanded = ref(true);
-
-function toggleItemized() {
-  if (itemized.value) {
+function selectMode(mode) {
+  const wantItemized = mode === 'itemized';
+  if (wantItemized === itemized.value) {
+    return;
+  }
+  if (!wantItemized) {
     if (
       items.value.length > 0 &&
       !window.confirm('A tételbontás elveszik, a végösszeg egyetlen összegként marad. Folytatod?')
@@ -204,11 +211,10 @@ function toggleItemized() {
     itemized.value = false;
     return;
   }
-  // Bekapcsolásnál a már beírt összeg egyetlen tételbe kerül, a számla
+  // Tételesre váltásnál a már beírt összeg egyetlen tételbe kerül, a számla
   // minden résztvevőjével — a „közös" tétel. Így semmi nem veszik el.
   items.value = [createItem({ amountMajor: amountMajor.value })];
   itemized.value = true;
-  itemsExpanded.value = true;
 }
 
 function addItem() {
@@ -400,10 +406,6 @@ function validate() {
     });
     if (itemErrors.some(Boolean)) {
       errors.itemRows = itemErrors;
-      // Egy csukott tétellistában a hibaüzenet láthatatlan lenne: a
-      // felhasználó annyit látna, hogy a mentés nem történt meg, azt nem,
-      // hogy miért. Ezért a hibás tételsor kinyitja a listát.
-      itemsExpanded.value = true;
     }
     if (itemsTotalMinor.value > maxAmountMinor) {
       errors.amount = `A végösszeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
@@ -571,136 +573,134 @@ onUnmounted(() => {
           {{ fieldErrors.description }}
         </p>
 
-        <div class="expense-modal__itemized">
-          <div class="expense-modal__itemized-row">
-            <label class="expense-modal__itemized-label">
-              <!--
-                `@click.prevent`, nem `@change`: a `toggleItemized` a
-                kikapcsolást megerősítéshez kötheti, és megszakításnál nem
-                változtat állapotot. A böngésző viszont a natív kattintáskor
-                MAGA átállítja a DOM-elemet, és Vue nem írja vissza, mert a
-                `:checked` kötött értéke ugyanaz maradt — a jelölőnégyzet így
-                az elvetett váltás után is átváltva látszott. Prevent-tel a
-                DOM-ot kizárólag a `:checked` mozgatja, tehát mindig az
-                állapotot mutatja. Billentyűzetről is működik: a szóköz is
-                kattintás-eseményt küld.
-              -->
-              <input
-                type="checkbox"
-                class="expense-modal__checkbox"
-                :checked="itemized"
-                :disabled="saving"
-                @click.prevent="toggleItemized"
-              />
-              <!--
-                A pipát ez a `<span>` rajzolja, nem az `<input>` egy
-                pszeudoeleme: az `<input>` helyettesített elem, és a Firefox
-                egyáltalán nem rendereli rajta a `::before`-t — ott a
-                jelölőnégyzet bejelölve is üresnek látszott. Az input maga
-                látszólag rejtett, de fókuszálható marad (a modál
-                fókuszcsapdája és a szóköz így változatlanul működik), a
-                megjelenést pedig a szomszédja adja.
-              -->
-              <span class="expense-modal__checkbox-box" aria-hidden="true"></span>
-              Tételes felosztás
-            </label>
-            <button
-              v-if="itemized"
-              type="button"
-              class="expense-modal__items-toggle"
-              :aria-expanded="itemsExpanded"
-              @click="itemsExpanded = !itemsExpanded"
-            >
-              {{ items.length }} tétel
-              <span class="expense-modal__items-caret" aria-hidden="true">▾</span>
-            </button>
-          </div>
-          <p class="expense-modal__itemized-hint">
-            Egy számla, több tétel — tételenként más osztozókkal.
-          </p>
+        <!--
+          A számlatípus fülekkel váltható, nem jelölőnégyzettel. Az ARIA
+          szerkezet ugyanaz, amit az esemény lapja is használ
+          (`tablist`/`tab`/`tabpanel`); a panel MINDIG jelen van, ezért az
+          `aria-controls` sosem hivatkozik nem létező elemre.
+        -->
+        <div class="expense-modal__tabs" role="tablist" aria-label="Számlatípus">
+          <button
+            id="tab-expense-simple"
+            type="button"
+            role="tab"
+            aria-controls="panel-expense-type"
+            :aria-selected="!itemized"
+            :tabindex="itemized ? -1 : 0"
+            class="expense-modal__tab"
+            :class="{ 'is-active': !itemized }"
+            :disabled="saving"
+            @click="selectMode('simple')"
+            @keydown.right.prevent="selectMode('itemized')"
+            @keydown.left.prevent="selectMode('itemized')"
+          >
+            Egyszerű
+          </button>
+          <button
+            id="tab-expense-itemized"
+            type="button"
+            role="tab"
+            aria-controls="panel-expense-type"
+            :aria-selected="itemized"
+            :tabindex="itemized ? 0 : -1"
+            class="expense-modal__tab"
+            :class="{ 'is-active': itemized }"
+            :disabled="saving"
+            @click="selectMode('itemized')"
+            @keydown.right.prevent="selectMode('simple')"
+            @keydown.left.prevent="selectMode('simple')"
+          >
+            Tételes
+          </button>
         </div>
 
-        <!--
-          `v-if`, nem `v-show`: a csukott tétellistának el kell tűnnie a
-          DOM-ból, mert a modál fókuszcsapdája (`focusableElements`) a
-          láthatóságot nem vizsgálja, csak a `disabled`-et — egy elrejtett
-          `v-show`-os blokk mezőibe így be lehetne tabolni. Ezért a lenyitó
-          gombon nincs `aria-controls` sem: csukott állapotban nem lenne mire
-          hivatkoznia.
-        -->
-        <fieldset v-if="itemized && itemsExpanded" class="modal__fieldset">
-          <legend>Tételek</legend>
-          <div v-for="(item, index) in items" :key="item.key" class="expense-item">
-            <div class="expense-item__row">
-              <input
-                v-model="item.description"
-                type="text"
-                class="input-line expense-item__description"
-                placeholder="Megnevezés (nem kötelező)"
-                maxlength="120"
-                :aria-label="`${index + 1}. tétel megnevezése`"
-                :disabled="saving"
-              />
-              <input
-                v-model.number="item.amountMajor"
-                type="number"
-                class="input-line money-input expense-item__amount"
-                :step="amountStep"
-                min="0"
-                placeholder="Összeg"
-                :aria-label="`${index + 1}. tétel összege`"
-                :disabled="saving"
-              />
-              <button
-                type="button"
-                class="btn btn--ghost btn--small expense-item__remove"
-                :aria-label="`${index + 1}. tétel törlése`"
-                :disabled="saving"
-                @click="removeItem(index)"
-              >
-                ×
-              </button>
-            </div>
-            <div class="modal__participants">
-              <button
-                type="button"
-                class="participant-chip expense-item__all"
-                :aria-label="`${index + 1}. tétel: mindenki`"
-                :disabled="saving"
-                @click="selectAllForItem(item)"
-              >
-                Mind
-              </button>
-              <button
-                v-for="id in sharedWithIds"
-                :key="id"
-                type="button"
-                class="participant-chip"
-                :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
-                :aria-label="`${index + 1}. tétel: ${participantName(id)}`"
-                :aria-pressed="item.sharedWithIds.includes(id)"
-                :disabled="saving"
-                @click="toggleItemParticipant(item, id)"
-              >
-                {{ participantName(id) }}
-              </button>
-            </div>
-            <p v-if="fieldErrors.itemRows?.[index]" role="alert" class="field-error">
-              {{ fieldErrors.itemRows[index] }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="btn btn--ghost btn--small"
-            :disabled="saving"
-            @click="addItem"
-          >
-            + Tétel
-          </button>
-          <p v-if="participantsWithoutItemLabel" class="expense-modal__no-item-note">
-            {{ participantsWithoutItemLabel }}
+        <div
+          id="panel-expense-type"
+          role="tabpanel"
+          :aria-labelledby="itemized ? 'tab-expense-itemized' : 'tab-expense-simple'"
+        >
+          <p class="expense-modal__tab-hint">
+            {{
+              itemized
+                ? 'Egy számla, több tétel — tételenként más osztozókkal.'
+                : 'Egy összeg, egyenlően elosztva az osztozók között.'
+            }}
           </p>
-        </fieldset>
+
+          <fieldset v-if="itemized" class="modal__fieldset">
+            <legend>Tételek</legend>
+            <div v-for="(item, index) in items" :key="item.key" class="expense-item">
+              <div class="expense-item__row">
+                <input
+                  v-model="item.description"
+                  type="text"
+                  class="input-line expense-item__description"
+                  placeholder="Megnevezés (nem kötelező)"
+                  maxlength="120"
+                  :aria-label="`${index + 1}. tétel megnevezése`"
+                  :disabled="saving"
+                />
+                <input
+                  v-model.number="item.amountMajor"
+                  type="number"
+                  class="input-line money-input expense-item__amount"
+                  :step="amountStep"
+                  min="0"
+                  placeholder="Összeg"
+                  :aria-label="`${index + 1}. tétel összege`"
+                  :disabled="saving"
+                />
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--small expense-item__remove"
+                  :aria-label="`${index + 1}. tétel törlése`"
+                  :disabled="saving"
+                  @click="removeItem(index)"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="modal__participants">
+                <button
+                  type="button"
+                  class="participant-chip expense-item__all"
+                  :aria-label="`${index + 1}. tétel: mindenki`"
+                  :disabled="saving"
+                  @click="selectAllForItem(item)"
+                >
+                  Mind
+                </button>
+                <button
+                  v-for="id in sharedWithIds"
+                  :key="id"
+                  type="button"
+                  class="participant-chip"
+                  :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
+                  :aria-label="`${index + 1}. tétel: ${participantName(id)}`"
+                  :aria-pressed="item.sharedWithIds.includes(id)"
+                  :disabled="saving"
+                  @click="toggleItemParticipant(item, id)"
+                >
+                  {{ participantName(id) }}
+                </button>
+              </div>
+              <p v-if="fieldErrors.itemRows?.[index]" role="alert" class="field-error">
+                {{ fieldErrors.itemRows[index] }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn--ghost btn--small"
+              :disabled="saving"
+              @click="addItem"
+            >
+              + Tétel
+            </button>
+            <p v-if="participantsWithoutItemLabel" class="expense-modal__no-item-note">
+              {{ participantsWithoutItemLabel }}
+            </p>
+          </fieldset>
+        </div>
 
         <div class="modal__row">
           <div class="field">
@@ -957,138 +957,84 @@ onUnmounted(() => {
   color: var(--ink-soft);
 }
 
-.expense-modal__itemized {
-  margin: var(--space-3) 0 var(--space-4);
-}
-
-.expense-modal__itemized-row {
+/* Számlatípus-fülek: aláhúzott felirat-pár, az aktív bankjegy-zöld vonallal.
+   Nem dossziéfül (mint az esemény lapján), mert ez az űrlap BELSŐ váltása —
+   halkabbnak kell lennie, mint a képernyő fő navigációja. */
+.expense-modal__tabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  margin: var(--space-4) 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
 }
 
-.expense-modal__itemized-label {
+.expense-modal__tab {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.92rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Az app egyetlen jelölőnégyzete, ezért itt lakik és nem a theme.css-ben.
-   A natív megjelenést a nyugta-nyelv váltja: szögletes doboz, bejelölve
-   bankjegy-zöld kitöltéssel — a `participant-chip` kiválasztott állapotának
-   ugyanazokkal a színeivel.
-
-   Az input látszólag rejtett, de NEM `display: none` és nem `visibility:
-   hidden`: fókuszálhatónak kell maradnia, mert a modál fókuszcsapdája
-   (`focusableElements`) rá támaszkodik, és a szóközzel váltás is ezen
-   keresztül megy. A doboz és a pipa a szomszédos `<span>`-en van, mert az
-   `<input>` helyettesített elem: a Firefox nem rendereli rajta a
-   pszeudoelemeket. */
-.expense-modal__checkbox {
-  position: absolute;
-  left: 0;
-  width: 1.05rem;
-  height: 1.05rem;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.expense-modal__checkbox-box {
-  flex-shrink: 0;
-  width: 1.05rem;
-  height: 1.05rem;
-  border: 1.5px solid var(--rule-strong);
-  border-radius: 2px;
-  background: var(--paper-raised);
-  display: grid;
-  place-content: center;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-/* A pipa rajzolt jel, nem betűkarakter: így a méretét a doboz szabja meg,
-   nem a szövegtörzs betűtípusa. */
-.expense-modal__checkbox-box::before {
-  content: '';
-  width: 0.55rem;
-  height: 0.3rem;
-  border-left: 2px solid var(--paper-raised);
-  border-bottom: 2px solid var(--paper-raised);
-  transform: rotate(-45deg) translate(0.03rem, -0.06rem);
-  opacity: 0;
-}
-
-.expense-modal__checkbox:checked + .expense-modal__checkbox-box {
-  background: var(--forint);
-  border-color: var(--forint);
-}
-
-.expense-modal__checkbox:checked + .expense-modal__checkbox-box::before {
-  opacity: 1;
-}
-
-.expense-modal__checkbox:focus-visible + .expense-modal__checkbox-box {
-  outline: 2px solid var(--forint);
-  outline-offset: 2px;
-}
-
-.expense-modal__checkbox:disabled {
-  cursor: not-allowed;
-}
-
-.expense-modal__checkbox:disabled + .expense-modal__checkbox-box {
-  opacity: 0.5;
-}
-
-/* Lenyitó a tétellistához, a kiadáslista `3 tétel` jelölésének párja. */
-.expense-modal__items-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  flex-shrink: 0;
-  padding: 0.15rem 0.5rem;
-  border: 1px dashed var(--rule-strong);
-  border-radius: 999px;
+  padding: 0.35em 0.15em;
+  border: none;
   background: none;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink-soft);
   cursor: pointer;
+  transition: color 0.12s ease;
 }
 
-.expense-modal__items-toggle[aria-expanded='true'] {
-  border-style: solid;
+/* Az aláhúzás külön elem, nem `border-bottom`: így pontosan a sáv vonalára
+   fekszik, és nem tolja el a feliratot aktiváláskor. */
+.expense-modal__tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--forint);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.expense-modal__tab.is-active {
   color: var(--forint);
 }
 
-.expense-modal__items-caret {
-  transition: transform 0.15s ease;
+.expense-modal__tab.is-active::after {
+  opacity: 1;
 }
 
-.expense-modal__items-toggle[aria-expanded='true'] .expense-modal__items-caret {
-  transform: rotate(180deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .expense-modal__checkbox-box,
-  .expense-modal__items-caret {
-    transition: none;
+@media (hover: hover) and (pointer: fine) {
+  .expense-modal__tab:not(.is-active):not(:disabled):hover {
+    color: var(--ink);
   }
 }
 
-.expense-modal__itemized-hint,
+.expense-modal__tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expense-modal__tab,
+  .expense-modal__tab::after {
+    transition: none;
+  }
+}
+.expense-modal__tab-hint,
 .expense-modal__no-item-note {
-  margin: var(--space-1) 0 0;
   font-size: 0.8rem;
   color: var(--ink-soft);
+}
+
+/* Alsó margó, nem felső: a fülsáv alatt a magyarázó sor egyszerű módban
+   közvetlenül az „Összeg" címkére ülne. */
+.expense-modal__tab-hint {
+  margin: 0 0 var(--space-3);
+}
+
+.expense-modal__no-item-note {
+  margin: var(--space-1) 0 0;
 }
 
 /* Tételsor: letépett nyugta-csík a nyugta-lapon belül. */
