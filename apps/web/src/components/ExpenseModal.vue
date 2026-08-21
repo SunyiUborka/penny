@@ -273,10 +273,16 @@ const baseAmountPreview = computed(() => {
     // Ugyanaz a függvény, ami a szerveren is számol — így a mutatott szám
     // pontosan az, ami tárolódni fog (a tételek külön átváltásának összege),
     // nem a végösszeg egyszeri átváltása.
+    // A még üres/0-s sorokat ki kell szűrni: a shared séma pozitív
+    // tétel-összeget követel, egy `0` eldobná az egész előnézetet. A fenti
+    // `amount <= 0` őr miatt itt legalább egy tétel biztosan pozitív, ha
+    // `itemized`, tehát a szűrés nem hozhat létre üres tömböt.
     return convertExpenseAmounts({
       amountMinor: amount,
       items: itemized.value
-        ? items.value.map((item) => ({ amountMinor: itemAmountMinor(item) }))
+        ? items.value
+            .map((item) => ({ amountMinor: itemAmountMinor(item) }))
+            .filter((item) => item.amountMinor > 0)
         : undefined,
       currency: currency.value,
       exchangeRate: exchangeRate.value,
@@ -578,6 +584,7 @@ onUnmounted(() => {
                 type="text"
                 class="expense-item__description"
                 placeholder="Megnevezés (nem kötelező)"
+                maxlength="120"
                 :aria-label="`${index + 1}. tétel megnevezése`"
                 :disabled="saving"
               />
@@ -604,6 +611,7 @@ onUnmounted(() => {
               <button
                 type="button"
                 class="participant-chip expense-item__all"
+                :aria-label="`${index + 1}. tétel: mindenki`"
                 :disabled="saving"
                 @click="selectAllForItem(item)"
               >
@@ -615,6 +623,7 @@ onUnmounted(() => {
                 type="button"
                 class="participant-chip"
                 :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
+                :aria-label="`${index + 1}. tétel: ${participantName(id)}`"
                 :aria-pressed="item.sharedWithIds.includes(id)"
                 :disabled="saving"
                 @click="toggleItemParticipant(item, id)"
