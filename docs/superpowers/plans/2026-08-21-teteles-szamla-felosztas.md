@@ -106,14 +106,18 @@ import { convertExpenseAmounts } from '/mnt/WDred/Docker/kassza/packages/shared/
   );
 }
 
-// 3. Tétel nélküli kiadás: a mai viselkedés, items nélkül.
+// 3. Tétel nélküli kiadás: a mai viselkedés, items nélkül. Az árfolyam
+//    jelentése „1 EUR = 400.5 HUF", tehát 1000 cent (10 EUR) -> 4005 Ft.
+//    Ez SZÓ SZERINT az, amit a mai `convertMinorAmount` ad ugyanezekkel az
+//    argumentumokkal — ezt a számítást a tételes felosztás NEM változtatja
+//    meg, csak tételenként végzi el.
 {
   const result = convertExpenseAmounts({
     amountMinor: 1000,
     currency: 'EUR',
     exchangeRate: '400.5',
   });
-  assert.equal(result.baseAmountMinor, 400500);
+  assert.equal(result.baseAmountMinor, 4005);
   assert.equal(result.items, undefined);
 }
 
