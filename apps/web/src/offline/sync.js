@@ -1,9 +1,9 @@
 import { Network } from '@capacitor/network';
 import { ZodError } from 'zod';
-import { expenseResponseSchema, SETTLEMENT_CURRENCY } from '@filler/shared';
+import { expenseResponseSchema } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { listEntries, markFailed, refreshCounts, removeEntry } from './outbox.js';
-import { fetchFreshRate } from './rates.js';
+import { RateResolutionError, withFreshRate } from './rates.js';
 import { useExpensesStore } from '../stores/expenses.js';
 
 /** Egyszerre csak egy futás legyen, különben ugyanaz az elem kétszer menne fel. */
@@ -26,29 +26,6 @@ const PAYLOAD_VERDICT_STATUS_CODES = new Set([400, 404, 409]);
  */
 function isPayloadVerdict(error) {
   return PAYLOAD_VERDICT_STATUS_CODES.has(error.statusCode);
-}
-
-/**
- * Az árfolyam frissítése közben történt, a kiadás írásáról semmit nem
- * mondó hiba (hálózathiba a `/rates` felé, vagy a válasza nem illik a
- * sémára). Szándékosan külön típus, nem puszta továbbdobás: a `syncOutbox`
- * osztályozója enélkül a kiváltó kivétel TÍPUSA alapján döntene — egy innen
- * származó `ZodError`-t tévesen a KIADÁS-válasz kontraktus-töréseként
- * kezelne, és véglegesen `failed`-be tenne egy olyan kiadást, amit még fel
- * sem küldtünk. Ez a típus a hiba EREDETE alapján osztályoz, nem a
- * TÍPUSA alapján — a `syncOutbox` ezt ugyanúgy retryable-nek veszi, mint
- * egy sima hálózathibát. Ne egyszerűsítsük vissza puszta `throw error`-ra;
- * az eredeti hiba a `cause`-ban megmarad diagnosztikai célra.
- */
-class RateResolutionError extends Error {
-  /**
-   * @param {unknown} cause
-   */
-  constructor(cause) {
-    super('Az árfolyam frissítése nem sikerült.');
-    this.name = 'RateResolutionError';
-    this.cause = cause;
-  }
 }
 
 /**
@@ -231,39 +208,6 @@ async function uploadEntry(entry) {
   return apiClient.patch(`/expenses/${entry.expenseId}`, payload, {
     schema: expenseResponseSchema,
   });
-}
-
-/**
- * Devizás kiadásnál a feltöltéskor érvényes árfolyammal dolgozunk: a felvitel
- * pillanatában legfeljebb egy cache-elt becslés állt rendelkezésre.
- * @param {object} payload
- * @returns {Promise<object>}
- */
-async function withFreshRate(payload) {
-  if (payload.currency === SETTLEMENT_CURRENCY || payload.rateSource === 'manual') {
-    return payload;
-  }
-  try {
-    const fresh = await fetchFreshRate(payload.currency, SETTLEMENT_CURRENCY);
-    return { ...payload, exchangeRate: fresh.rate, rateFetchedAt: fresh.fetchedAt };
-  } catch (error) {
-    if (error instanceof ApiError) {
-      // A szerver ténylegesen nemet mondott az árfolyamra (pl. nem
-      // támogatott devizapár) — ez végleges verdikt, a becsléssel megyünk
-      // tovább: ez még mindig jobb, mint a kiadást a sorban ragasztani.
-      return payload;
-    }
-    // Hálózathiba vagy sémaeltérés: nem tudjuk, mi a friss árfolyam, de ez
-    // nem végleges — nem szabad csendben ráfogni a becslésre, hogy az a
-    // végleges érték. Az elemnek `pending`-en kell maradnia, hogy a
-    // következő (remélhetőleg sikeres) próbálkozáskor valódi árfolyammal
-    // menjen fel. A `RateResolutionError`-ba csomagolva dobjuk tovább, nem
-    // nyersen: a `syncOutbox` osztályozója különben a kiváltó kivétel
-    // TÍPUSA (pl. egy itteni `ZodError`) alapján tévesen a KIADÁS-válasz
-    // kontraktus-töréseként kezelné, és véglegesen `failed`-be tenne egy
-    // olyan kiadást, amit még fel sem küldtünk.
-    throw new RateResolutionError(error);
-  }
 }
 
 /**

@@ -235,8 +235,11 @@ Devizás kiadás felvitelekor, ha van korábbi cache-elt árfolyam az adott
 devizapárra, azt használja az űrlap előnézete — „Becsült árfolyam” felirattal,
 ha ez a cache-elt érték nem a mai napról származik (ha egyáltalán nincs
 korábbi árfolyam, kézi megadást kér). Ez az érték mindig csak becslés: a
-forintra átváltott végleges összeg mindig a **feltöltéskor** frissen lekért
-árfolyammal dől el.
+forintra átváltott végleges összeg sosem egy becslésből dől el, hanem frissen
+lekért árfolyamból — **mentéskor** (ha van kapcsolat, az app a becsült
+árfolyamot a Mentés pillanatában újra lekéri), sorbanállított tételnél pedig a
+**feltöltéskor**. Ha épp egyik sem sikerül, a kiadás inkább sorban marad
+(„függőben”, `≈` jelzéssel), mint hogy a becslés véglegesként rögzüljön.
 
 Egy tétel csak akkor kerül elakadt („failed”) állapotba, ha a szerver
 véglegesen, magáról a tételről mond nemet (érvénytelen adat, törölt esemény,
