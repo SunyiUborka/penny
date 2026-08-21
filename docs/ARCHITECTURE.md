@@ -732,11 +732,47 @@ tárolt** érték mindig frissen lekért árfolyammal dől el (`fetchFreshRate`)
 sosem egy elavult becsléssel. Ezt a `withFreshRate` (`offline/rates.js`)
 végzi, és **mind a két írási út** hívja:
 
-- a `stores/expenses.js` `createExpense`-e **a mentés pillanatában**, ha az
-  űrlapon becsült árfolyam van (`isEstimatedRate`: devizás, `api` eredetű,
-  de nem mai `rateFetchedAt` — ugyanaz a szabály, amit a `≈` jelölés
-  használ). Friss vagy kézi árfolyamnál nincs mit feloldani;
-- az `offline/sync.js` a **sorbanállított** tétel feltöltésekor.
+- a `stores/expenses.js` `createExpense`-e és `updateExpense`-e **a mentés
+  pillanatában**, ha az űrlap maga oldotta fel az árfolyamot ÉS az becslés
+  (`isEstimatedRate`: devizás, `api` eredetű, de nem mai `rateFetchedAt` —
+  ugyanaz a szabály, amit a `≈` jelölés használ). Friss vagy kézi
+  árfolyamnál, illetve a kiadás öröklött, korabeli árfolyamánál nincs mit
+  feloldani;
+- az `offline/sync.js` a **sorbanállított** tétel feltöltésekor — de csak
+  azokon a bejegyzéseken, amiknek az árfolyamát az űrlap oldotta fel (lásd
+  alább).
+
+**Melyik árfolyam oldódik fel újra a feltöltéskor, és melyik marad
+történelmi adat.** A szabály egy mondat: a feltöltés **akkor és csak akkor**
+old fel újra árfolyamot, ha a bejegyzés payloadjában lévő árfolyamot **az
+űrlap oldotta fel a beküldés pillanatában** — ezt a
+`ExpenseModal.vue` `rateResolvedByForm` ténye mondja meg, és a `create`,
+illetve az `update` bejegyzésre ugyanígy áll, nincs típus szerinti kivétel
+(`offline/sync.js` `needsFreshRate`). Következmények:
+
+- egy **offline szerkesztés, ami nem nyúlt az árfolyamhoz** (pl. csak a
+  leírás elírását javítja) a kiadás **korabeli árfolyamát megőrzi**. Ez a
+  szabály fontos fele: amíg a `withFreshRate` az `update` bejegyzésekre is
+  lefutott, egy júniusi, 100 EUR-os vacsora leírásának javítása augusztusban
+  a mai árfolyamra értékelte át az egész kiadást — a felhasználó egy szót
+  írt át, a forint-érték pedig megváltozott;
+- ha a szerkesztés **pénznemet váltott** (vagy új kiadást viszünk fel), az
+  űrlap friss árfolyamot kér, tehát az érték jelenkori — ezt a feltöltés
+  újra feloldja, mert a sorban töltött napok alatt elavul. Ha a feloldás nem
+  dől el véglegesen, a tétel `pending` marad (lásd lentebb), sosem
+  véglegesítünk becslést;
+- **kézzel megadott** árfolyamot (`rateSource: 'manual'`) semmi nem ír át.
+
+**Ez a tény nem kikövetkeztethető a payloadból, ezért utazik külön.** Egy
+hónapokkal korábbi devizás kiadás öröklött árfolyama (`rateSource: 'api'`,
+régi `rateFetchedAt`) megkülönböztethetetlen egy elavult becsléstől —
+mindkettő öreg, tehát az `isEstimatedRate` mindkettőre igazat ad. A
+`rateResolvedByForm` ezért a payload MELLETT megy végig a láncon (a modal
+külön emit-argumentumban adja, a store külön paraméterként veszi, az outbox
+külön mezőben tárolja), és **a szervernek küldött kiadás-payloadba soha nem
+kerül bele** — nem a kiadás adata, hanem a kliens tudása az árfolyam
+eredetéről. Ne told bele a payloadba „egyszerűsítés” gyanánt, és ne próbáld
+a `rateFetchedAt`-ból visszafejteni.
 
 **A `withFreshRate` ezért az `offline/rates.js`-ben lakik, nem a
 szinkron-motorban.** Amíg csak ott élt, egy közvetlenül sikeres POST teljesen
@@ -766,9 +802,11 @@ Ha az árfolyam **nem dől el véglegesen** (a `/rates` felé hálózathiba,
 sémaeltérés vagy nem a `400`/`404` verdiktbe tartozó szerverhiba), egyik út
 sem véglegesíti a becslést: a
 `RateResolutionError` a sorbanállított tételt `pending`-en hagyja, a mentési
-út pedig ilyenkor sorba állítja a kiadást ahelyett, hogy POST-olná. Amíg a
-tétel `pending`, a felület `≈`-vel és az elszámolás figyelmeztetésével
-jelzi, hogy az érték még nem végleges.
+út pedig ilyenkor sorba állítja a kiadást ahelyett, hogy POST-olná vagy
+PATCH-olná. Amíg a tétel `pending`, a felület `≈`-vel és az elszámolás
+figyelmeztetésével jelzi, hogy az érték még nem végleges. Mind a **négy**
+írási út (online/sorbanállított × létrehozás/szerkesztés) ugyanezt teszi —
+a becslés véglegesítése egyiken sem lehetséges.
 
 ### 10.4 Elszámolás offline kiadásokkal
 

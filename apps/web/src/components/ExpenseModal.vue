@@ -43,6 +43,26 @@ const sharedWithIds = ref([...props.event.participantIds]);
 const rateLoading = ref(false);
 const rateError = ref('');
 const rateEstimated = ref(false);
+/**
+ * Igaz, ha a beküldött árfolyamot **ez az űrlap oldotta fel** a szerverről
+ * (jelenkori árfolyam) — hamis, ha a szerkesztett kiadás SAJÁT, korabeli
+ * árfolyamát örököltük, vagy ha a felhasználó kézzel írta be.
+ *
+ * Ez a tény kizárólag itt ismerhető meg, a payload adataiból NEM
+ * kikövetkeztethető: egy hónapokkal korábbi devizás kiadás öröklött
+ * árfolyama pontosan úgy néz ki (`rateSource: 'api'`, régi `rateFetchedAt`),
+ * mint egy elavult becslés — mindkettő öreg. Ezért utazik külön, a
+ * payloadtól elválasztva a store-ig és onnan az outbox-bejegyzésig: a
+ * szinkron-motor ebből (és csakis ebből) tudja, hogy szabad-e feltöltéskor
+ * újra feloldani az árfolyamot. Egy leírás-javítás így nem értékeli át a
+ * júniusi vacsorát a mai árfolyamon (végső re-review U2).
+ *
+ * **A szervernek küldött payloadba nem kerülhet bele** — nem a kiadás
+ * adata, hanem a kliens tudása az árfolyam eredetéről; ezért is külön
+ * argumentumként emittáljuk, nem a payload egyik mezőjeként.
+ * @type {import('vue').Ref<boolean>}
+ */
+const rateResolvedByForm = ref(false);
 const fieldErrors = ref({});
 
 let initialSnapshot = '';
@@ -70,6 +90,11 @@ function resetFromExpense(expense) {
     exchangeRate.value = expense.exchangeRate;
     rateSource.value = expense.rateSource;
     rateFetchedAt.value = expense.rateFetchedAt;
+    // A kiadás SAJÁT, korabeli árfolyamát töltöttük be — nem mi oldottuk fel
+    // most. Amíg a felhasználó nem vált pénznemet (és nem ír be kézzel
+    // árfolyamot), ez a szám a kiadás történelmi árfolyama, amit meg kell
+    // őrizni.
+    rateResolvedByForm.value = false;
     sharedWithIds.value = [...expense.sharedWithIds];
   } else {
     date.value = todayLocalDateString();
@@ -80,6 +105,7 @@ function resetFromExpense(expense) {
     exchangeRate.value = '1';
     rateSource.value = 'manual';
     rateFetchedAt.value = null;
+    rateResolvedByForm.value = false;
     sharedWithIds.value = [...props.event.participantIds];
   }
   nextTick(() => {
@@ -141,6 +167,9 @@ async function fetchRate() {
     exchangeRate.value = '1';
     rateSource.value = 'manual';
     rateFetchedAt.value = new Date();
+    // Forintnál nincs mit feloldani (az „árfolyam" fix 1), tehát a
+    // feltöltéskor sem lesz.
+    rateResolvedByForm.value = false;
     return;
   }
   rateLoading.value = true;
@@ -152,9 +181,16 @@ async function fetchRate() {
     rateFetchedAt.value = result.fetchedAt;
     rateSource.value = 'api';
     rateEstimated.value = result.estimated;
+    // EZ az űrlap oldotta fel az árfolyamot: jelenkori árfolyam, nem a
+    // kiadás korabeli értéke. Akkor is igaz, ha a feloldás friss (mai)
+    // értéket adott — lásd a `rateResolvedByForm` jegyzetét: a beküldés és a
+    // tényleges feltöltés között napok telhetnek el offline.
+    rateResolvedByForm.value = true;
   } catch {
     rateError.value = 'Nem sikerült lekérni az árfolyamot. Add meg kézzel.';
     rateSource.value = 'manual';
+    // Kézi árfolyamot senki nem írhat felül a feltöltéskor.
+    rateResolvedByForm.value = false;
   } finally {
     rateLoading.value = false;
   }
@@ -171,6 +207,9 @@ if (!isEditMode.value) {
 function handleRateInput() {
   rateSource.value = 'manual';
   rateEstimated.value = false;
+  // A felhasználó saját száma: sem a mentés, sem a feltöltés nem cserélheti
+  // le egy frissen lekértre.
+  rateResolvedByForm.value = false;
 }
 
 function toggleParticipant(personId) {
@@ -210,17 +249,25 @@ function handleSubmit() {
   if (!validate()) {
     return;
   }
-  emit('submit', {
-    date: date.value,
-    description: description.value.trim(),
-    payerId: payerId.value,
-    amountMinor: amountMinor.value,
-    currency: currency.value,
-    exchangeRate: exchangeRate.value,
-    rateSource: rateSource.value,
-    rateFetchedAt: rateSource.value === 'api' ? rateFetchedAt.value : undefined,
-    sharedWithIds: sharedWithIds.value,
-  });
+  emit(
+    'submit',
+    {
+      date: date.value,
+      description: description.value.trim(),
+      payerId: payerId.value,
+      amountMinor: amountMinor.value,
+      currency: currency.value,
+      exchangeRate: exchangeRate.value,
+      rateSource: rateSource.value,
+      rateFetchedAt: rateSource.value === 'api' ? rateFetchedAt.value : undefined,
+      sharedWithIds: sharedWithIds.value,
+    },
+    // Kliensoldali kísérő tény, SZÁNDÉKOSAN külön argumentumban: az első
+    // argumentum az, ami a szervernek megy, ez pedig soha nem mehet oda.
+    // Külön objektumban ez szerkezetileg garantált — egy payload-mezőt
+    // előbb-utóbb valaki továbbküldene.
+    { rateResolvedByForm: rateResolvedByForm.value },
+  );
 }
 
 function attemptClose() {

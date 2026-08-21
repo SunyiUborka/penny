@@ -3,7 +3,16 @@ import { useOfflineStore } from '../stores/offline.js';
 
 /**
  * Sorbanállított kiadás-módosítás felvétele.
- * @param {{ type: 'create'|'update'|'delete', eventId: string, expenseId?: string, clientId?: string, payload?: object }} entry
+ *
+ * A `rateResolvedByForm` **kliensoldali kísérő tény**, nem a kiadás adata: a
+ * bejegyzés mellett utazik, a `payload`-on KÍVÜL — így szerkezetileg kizárt,
+ * hogy a feltöltéskor a szerverre kerüljön (a feltöltő a `payload`-ot küldi,
+ * változatlanul). Azt mondja meg, hogy a payloadban lévő árfolyamot az űrlap
+ * oldotta-e fel a beküldés pillanatában (jelenkori árfolyam), vagy a
+ * szerkesztett kiadás korabeli, eltárolt árfolyamát örököltük — ebből tudja a
+ * szinkron-motor, hogy szabad-e feltöltéskor újra feloldani (lásd
+ * `offline/sync.js` `needsFreshRate`).
+ * @param {{ type: 'create'|'update'|'delete', eventId: string, expenseId?: string, clientId?: string, payload?: object, rateResolvedByForm?: boolean }} entry
  * @returns {Promise<object>}
  */
 export async function enqueue(entry) {
@@ -15,6 +24,7 @@ export async function enqueue(entry) {
     expenseId: entry.expenseId ?? null,
     clientId: entry.clientId ?? null,
     payload: entry.payload ?? null,
+    rateResolvedByForm: entry.rateResolvedByForm ?? false,
     status: 'pending',
     error: null,
     createdAt: new Date(),

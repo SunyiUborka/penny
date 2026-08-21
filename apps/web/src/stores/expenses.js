@@ -500,22 +500,34 @@ export const useExpensesStore = defineStore('expenses', {
     /**
      * @param {string} eventId
      * @param {object} input
+     * @param {{ rateResolvedByForm?: boolean }} [rateMeta] kliensoldali kísérő
+     * tény az árfolyam eredetéről (lásd `ExpenseModal.vue`). Létrehozásnál az
+     * alapérték `true`: egy új kiadás árfolyamát mindig az űrlap oldja fel,
+     * nincs miből örökölni.
      */
-    async createExpense(eventId, input) {
+    async createExpense(eventId, input, rateMeta = {}) {
       const clientId = crypto.randomUUID();
+      const rateResolvedByForm = rateMeta.rateResolvedByForm ?? true;
       let body = { ...input, clientId };
-      // Ha az űrlapon BECSÜLT árfolyam van (devizás, szervertől kapott, de nem
-      // mai árfolyam — lásd `isEstimatedRate`), a mentés pillanatában újra
-      // feloldjuk. Enélkül a `withFreshRate` csak az outbox-on átmenő
-      // tételekre futott: egy közvetlenül sikeres POST teljesen kihagyta,
-      // tehát egy három napos becslés VÉGLEGESEN tárolt értékké vált —
-      // pending jelzés, `≈` és elszámolás-figyelmeztetés nélkül, vagyis a
-      // felhasználó egy elavult becslésből számolt egyenleget látott
-      // véglegesként (végső review I5). A modal jegyzete és a dokumentáció
-      // is ezt ígéri; ezen az úton a „feltöltés" épp ez a POST.
+      // Ha az űrlapon BECSÜLT árfolyam van (az űrlap oldotta fel, de nem mai
+      // — lásd `isEstimatedRate`), a mentés pillanatában újra feloldjuk.
+      // Enélkül a `withFreshRate` csak az outbox-on átmenő tételekre futott:
+      // egy közvetlenül sikeres POST teljesen kihagyta, tehát egy három napos
+      // becslés VÉGLEGESEN tárolt értékké vált — pending jelzés, `≈` és
+      // elszámolás-figyelmeztetés nélkül, vagyis a felhasználó egy elavult
+      // becslésből számolt egyenleget látott véglegesként (végső review I5).
+      // A modal jegyzete és a dokumentáció is ezt ígéri; ezen az úton a
+      // „feltöltés" épp ez a POST.
       // Friss (mai) vagy kézi árfolyamnál nincs mit feloldani: az nem
-      // becslés, és egy felesleges `/rates` kör csak lassítaná a mentést.
-      if (isEstimatedRate(body)) {
+      // becslés, és egy felesleges `/rates` kör csak lassítaná a mentést —
+      // ráadásul egy ilyen felesleges kör átmeneti hibája sorba állítana egy
+      // amúgy tökéletes árfolyammal mentendő kiadást.
+      //
+      // Az `isEstimatedRate` önmagában NEM elég szűrő: egy öröklött, korabeli
+      // árfolyam ugyanúgy „öreg", mint egy elavult becslés. Ezért a
+      // `rateResolvedByForm` az első feltétel — az mondja meg, hogy egyáltalán
+      // a MI feloldásunkról beszélünk-e (végső re-review U2).
+      if (rateResolvedByForm && isEstimatedRate(body)) {
         try {
           body = await withFreshRate(body);
         } catch (error) {
@@ -528,7 +540,13 @@ export const useExpensesStore = defineStore('expenses', {
           // a feltöltéskor újra megkísérli a friss árfolyamot, és addig a sor
           // `pending`, tehát a felület `≈`-vel és az elszámolás
           // figyelmeztetéssel jelzi, hogy az érték még nem végleges.
-          const pendingEntry = await enqueue({ type: 'create', eventId, clientId, payload: body });
+          const pendingEntry = await enqueue({
+            type: 'create',
+            eventId,
+            clientId,
+            payload: body,
+            rateResolvedByForm,
+          });
           this.upsertExpense(toPendingExpense(pendingEntry));
           return null;
         }
@@ -548,7 +566,13 @@ export const useExpensesStore = defineStore('expenses', {
           // állítanánk sorba még egyszer.
           throw error;
         }
-        const entry = await enqueue({ type: 'create', eventId, clientId, payload: body });
+        const entry = await enqueue({
+          type: 'create',
+          eventId,
+          clientId,
+          payload: body,
+          rateResolvedByForm,
+        });
         this.upsertExpense(toPendingExpense(entry));
         return null;
       }
@@ -557,10 +581,56 @@ export const useExpensesStore = defineStore('expenses', {
     /**
      * @param {string} id
      * @param {object} input
+     * @param {{ rateResolvedByForm?: boolean }} [rateMeta] kliensoldali kísérő
+     * tény az árfolyam eredetéről (lásd `ExpenseModal.vue`). Szerkesztésnél az
+     * alapérték `false`: ha a hívó nem mondja, hogy az árfolyamot most oldotta
+     * fel, akkor a kiadás korabeli árfolyamát őrizzük meg — abból a puszta
+     * adatból ez ugyanis nem derül ki (végső re-review U2).
      */
-    async updateExpense(id, input) {
+    async updateExpense(id, input, rateMeta = {}) {
+      const rateResolvedByForm = rateMeta.rateResolvedByForm ?? false;
+      let body = input;
+      // Ugyanaz a szabály, mint a `createExpense`-ben, és ugyanabból az okból:
+      // ha a szerkesztés SAJÁT árfolyam-feloldást hozott (a felhasználó
+      // pénznemet váltott), és az feltehetően becslés, akkor a mentés
+      // pillanatában újra feloldjuk — enélkül egy sikeres PATCH véglegesként
+      // tárolna egy elavult becslést, `pending` jelzés, `≈` és
+      // elszámolás-figyelmeztetés nélkül. Ez nem elméleti: a `/rates`
+      // `502 RATE_UNAVAILABLE`-je (kimerült kvóta) mellett az `/expenses`
+      // PATCH tökéletesen működik, tehát pontosan ez a helyzet állhat elő.
+      //
+      // Ha a szerkesztés NEM nyúlt az árfolyamhoz (`rateResolvedByForm`
+      // hamis), itt nincs mit tenni: az űrlapon a kiadás korabeli árfolyama
+      // van, azt meg kell őrizni — az `isEstimatedRate` erre igazat adna
+      // (öreg árfolyam), és pont ez volt a hiba (végső re-review U2).
+      if (rateResolvedByForm && isEstimatedRate(body)) {
+        try {
+          body = await withFreshRate(body);
+        } catch (error) {
+          if (!(error instanceof RateResolutionError)) {
+            throw error;
+          }
+          const existing = this.expenses.find((expense) => expense.id === id);
+          if (!existing) {
+            throw error;
+          }
+          // Az árfolyam nem dőlt el véglegesen: a `createExpense` mintájára
+          // inkább sorba állítjuk, mint hogy becslést PATCH-oljunk
+          // véglegesként. A sor `pending`, tehát a felület `≈`-vel és az
+          // elszámolás figyelmeztetésével jelzi, hogy még nem végleges.
+          await enqueue({
+            type: 'update',
+            eventId: existing.eventId,
+            expenseId: id,
+            payload: body,
+            rateResolvedByForm,
+          });
+          this.upsertExpense(toPendingUpdate(existing, body));
+          return null;
+        }
+      }
       try {
-        const updated = await apiClient.patch(`/expenses/${id}`, input, {
+        const updated = await apiClient.patch(`/expenses/${id}`, body, {
           schema: expenseResponseSchema,
         });
         this.upsertExpense(updated);
@@ -581,9 +651,10 @@ export const useExpensesStore = defineStore('expenses', {
           type: 'update',
           eventId: existing.eventId,
           expenseId: id,
-          payload: input,
+          payload: body,
+          rateResolvedByForm,
         });
-        this.upsertExpense(toPendingUpdate(existing, input));
+        this.upsertExpense(toPendingUpdate(existing, body));
         return null;
       }
     },
