@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
+import { useOfflineStore } from '../stores/offline.js';
+import { EVENTS_CACHE_KEY, PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import { formatDate } from '../utils/format.js';
 import { isNativeApp } from '../utils/platform.js';
@@ -12,6 +14,7 @@ import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 const router = useRouter();
 const eventsStore = useEventsStore();
 const peopleStore = usePeopleStore();
+const offlineStore = useOfflineStore();
 
 const showCreateModal = ref(false);
 const saving = ref(false);
@@ -21,11 +24,21 @@ const pullRatio = ref(0);
 let detachPullToRefresh = null;
 
 onMounted(async () => {
+  // Ez a képernyő két cache-kulcsból mutat adatot: az eseménylistából és a
+  // névjegyzékből (a „Résztvevők" oszlop nevei). Az offline sáv pontosan
+  // ezekre néz — lásd `stores/offline.js` `setVisibleKeys`.
+  offlineStore.setVisibleKeys([EVENTS_CACHE_KEY, PEOPLE_CACHE_KEY]);
+
   // A lehúzásos gesztus natív affordance: böngészőben nincs rá szükség, ott
   // az oldal újratöltése a megszokott mozdulat.
   if (isNativeApp()) {
     detachPullToRefresh = attachPullToRefresh({
-      onRefresh: () => eventsStore.refreshQuietly(),
+      // MINDKÉT látható kulcs frissül, nem csak az eseménylista: a
+      // résztvevő-nevek a névjegyzékből jönnek, tehát egy csak-eseménylista
+      // frissítés után a képernyő egyik fele még mindig elavult adatot
+      // mutatna — és az offline sáv (helyesen) fent is maradna, hiába
+      // frissült a lista a felhasználó szeme előtt (végső re-review U1).
+      onRefresh: () => Promise.all([eventsStore.refreshQuietly(), peopleStore.refreshQuietly()]),
       onProgress: (ratio) => {
         pullRatio.value = ratio;
       },

@@ -28,7 +28,14 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  // Ez a képernyő egyetlen cache-elt OLVASÁST sem jelenít meg: a sor
+  // közvetlenül az outboxból jön, ami mindig a legfrissebb helyi állapot.
+  // Ezért üres a bejelentés — az offline sáv itt nem állíthatja, hogy régi
+  // adatot látunk (lásd `stores/offline.js` `setVisibleKeys`).
+  offlineStore.setVisibleKeys([]);
+  load();
+});
 
 // A várakozó és az elakadt darabszám az egyetlen jel, ami a `refreshCounts()`
 // minden hívásakor (minden outbox-mutáción, tehát egy háttérben — nem

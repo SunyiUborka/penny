@@ -6,6 +6,8 @@ import { ApiError } from '../api/client.js';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
 import { useExpensesStore } from '../stores/expenses.js';
+import { useOfflineStore } from '../stores/offline.js';
+import { eventCacheKey, expensesCacheKey, PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -16,6 +18,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 const peopleStore = usePeopleStore();
 const expensesStore = useExpensesStore();
+const offlineStore = useOfflineStore();
 
 const event = ref(null);
 const loading = ref(true);
@@ -98,9 +101,26 @@ async function refreshEventQuietly() {
   }
 }
 
+/**
+ * A képernyő SAJÁT (nem a kiadáslistából jövő) adatainak csendes frissítése:
+ * az esemény és a névjegyzék. A kiadáslistát a kiadás-store maga frissíti
+ * (`refreshQuietly`), ugyanezekre az alkalmakra feliratkozva.
+ *
+ * A névjegyzék miért tartozik ide: a fejléc résztvevő-nevei és a táblázat
+ * „Kifizette"/„Osztozók" oszlopai ebből jönnek, tehát a `people` kulcs is
+ * ezen a képernyőn LÁTHATÓ — ha ez az egy kulcs sosem frissülne, egy
+ * helyreállás után is elavult maradna, és (helyesen) fenntartaná az offline
+ * sávot azon a képernyőn, aminek az adata épp a szemünk előtt frissült
+ * (végső re-review U1).
+ * @returns {Promise<void>}
+ */
+async function refreshScreenQuietly() {
+  await Promise.all([refreshEventQuietly(), peopleStore.refreshQuietly()]);
+}
+
 function handleVisibility() {
   if (document.visibilityState === 'visible') {
-    refreshEventQuietly();
+    refreshScreenQuietly();
   }
 }
 
@@ -118,11 +138,21 @@ watch(
       everConnected = true;
       return;
     }
-    refreshEventQuietly();
+    refreshScreenQuietly();
   },
 );
 
 onMounted(() => {
+  // Ez a képernyő három cache-kulcsból mutat adatot: magából az eseményből, a
+  // kiadáslistájából és a névjegyzékből (a nevek). Az offline sáv pontosan
+  // ezekre néz, és semmi másra — egy korábban megnyitott, MÁS esemény elavult
+  // kulcsa itt nem állíthat semmit (lásd `stores/offline.js` `setVisibleKeys`).
+  offlineStore.setVisibleKeys([
+    eventCacheKey(route.params.id),
+    expensesCacheKey(route.params.id),
+    PEOPLE_CACHE_KEY,
+  ]);
+
   // A feliratkozás és a kiadás-betöltés itt van, nem a kiadás-fül
   // komponensében: a két fül `v-if`-fel váltakozik, tehát az ott nyitott
   // stream az Elszámolás fülre váltva lezárulna — pedig az elszámolás épp
@@ -234,7 +264,12 @@ async function handleDelete() {
         role="tabpanel"
         :aria-labelledby="activeTab === 'expenses' ? 'tab-expenses' : 'tab-settlement'"
       >
-        <ExpenseTable v-if="activeTab === 'expenses'" :event="event" :people="peopleStore.people" />
+        <ExpenseTable
+          v-if="activeTab === 'expenses'"
+          :event="event"
+          :people="peopleStore.people"
+          @refresh="refreshScreenQuietly"
+        />
         <SettlementPanel v-else :event="event" :people="peopleStore.people" />
       </section>
 
