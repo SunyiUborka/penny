@@ -34,6 +34,23 @@ const actionError = ref('');
 const pullRatio = ref(0);
 let detachPullToRefresh = null;
 
+/**
+ * Mely számlák tétellistája van lenyitva. Új `Set` referenciával váltunk,
+ * mert a `Set` belső mutációja nem indítana újrarenderelést.
+ * @type {import('vue').Ref<Set<string>>}
+ */
+const expandedIds = ref(new Set());
+
+function toggleItems(expenseId) {
+  const next = new Set(expandedIds.value);
+  if (next.has(expenseId)) {
+    next.delete(expenseId);
+  } else {
+    next.add(expenseId);
+  }
+  expandedIds.value = next;
+}
+
 onMounted(() => {
   // A lehúzásos gesztus natív affordance, nem az SSE hiányának a
   // helyettesítője — böngészőben ne kapjon touch-gesztust.
@@ -180,57 +197,84 @@ async function handleDelete(expense) {
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="expense in filteredExpenses"
-          :key="expense.id"
-          class="expense-table__row"
-          :class="{
-            'is-fresh': expensesStore.freshIds.has(expense.id),
-            'is-pending': expense.pending,
-          }"
-          :tabindex="expense.pending ? -1 : 0"
-          :title="
-            expense.pending
-              ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
-              : undefined
-          "
-          @click="openEditModal(expense)"
-          @keydown.enter="openEditModal(expense)"
-        >
-          <td data-label="Dátum" class="money">{{ formatDate(expense.date) }}</td>
-          <td data-label="Leírás" class="expense-table__description">
-            {{ expense.description }}
-            <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
-          </td>
-          <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
-          <td data-label="Összeg" class="align-right money">
-            {{ formatMoney({ amountMinor: expense.amountMinor, currency: expense.currency }) }}
-          </td>
-          <!--
-            A `≈` („becsült") csak akkor jár, ha ténylegesen történt
-            árfolyam-átváltás: egy forintban rögzített pending sornál az összeg
-            pontos, ott a jelölés azt állította volna, hogy egy pontos szám
-            becsült.
-          -->
-          <td data-label="Alapvaluta" class="align-right money money--credit">
-            {{ expense.pending && expense.currency !== SETTLEMENT_CURRENCY ? '≈ ' : ''
-            }}{{
-              formatMoney({ amountMinor: expense.baseAmountMinor, currency: SETTLEMENT_CURRENCY })
-            }}
-          </td>
-          <td data-label="Osztozók" class="expense-table__shared">
-            {{ expense.sharedWithIds.map(participantName).join(', ') }}
-          </td>
-          <td v-if="!expense.pending" data-label="">
-            <button
-              type="button"
-              class="btn btn--danger btn--small"
-              @click.stop="handleDelete(expense)"
-            >
-              Törlés
-            </button>
-          </td>
-        </tr>
+        <template v-for="expense in filteredExpenses" :key="expense.id">
+          <tr
+            class="expense-table__row"
+            :class="{
+              'is-fresh': expensesStore.freshIds.has(expense.id),
+              'is-pending': expense.pending,
+            }"
+            :tabindex="expense.pending ? -1 : 0"
+            :title="
+              expense.pending
+                ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
+                : undefined
+            "
+            @click="openEditModal(expense)"
+            @keydown.enter="openEditModal(expense)"
+          >
+            <td data-label="Dátum" class="money">{{ formatDate(expense.date) }}</td>
+            <td data-label="Leírás" class="expense-table__description">
+              {{ expense.description }}
+              <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
+            </td>
+            <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
+            <td data-label="Összeg" class="align-right money">
+              {{ formatMoney({ amountMinor: expense.amountMinor, currency: expense.currency }) }}
+            </td>
+            <!--
+              A `≈` („becsült") csak akkor jár, ha ténylegesen történt
+              árfolyam-átváltás: egy forintban rögzített pending sornál az összeg
+              pontos, ott a jelölés azt állította volna, hogy egy pontos szám
+              becsült.
+            -->
+            <td data-label="Alapvaluta" class="align-right money money--credit">
+              {{ expense.pending && expense.currency !== SETTLEMENT_CURRENCY ? '≈ ' : ''
+              }}{{
+                formatMoney({
+                  amountMinor: expense.baseAmountMinor,
+                  currency: SETTLEMENT_CURRENCY,
+                })
+              }}
+            </td>
+            <td data-label="Osztozók" class="expense-table__shared">
+              {{ expense.sharedWithIds.map(participantName).join(', ') }}
+              <button
+                v-if="expense.items"
+                type="button"
+                class="expense-table__items-toggle"
+                :aria-expanded="expandedIds.has(expense.id)"
+                @click.stop="toggleItems(expense.id)"
+              >
+                {{ expense.items.length }} tétel
+              </button>
+            </td>
+            <td v-if="!expense.pending" data-label="">
+              <button
+                type="button"
+                class="btn btn--danger btn--small"
+                @click.stop="handleDelete(expense)"
+              >
+                Törlés
+              </button>
+            </td>
+          </tr>
+          <tr v-if="expense.items && expandedIds.has(expense.id)" class="expense-table__items-row">
+            <td colspan="7">
+              <ul class="expense-table__items">
+                <li v-for="(item, index) in expense.items" :key="index">
+                  <span class="expense-table__item-name">{{ item.description || '—' }}</span>
+                  <span class="money expense-table__item-amount">
+                    {{ formatMoney({ amountMinor: item.amountMinor, currency: expense.currency }) }}
+                  </span>
+                  <span class="expense-table__item-shared">
+                    {{ item.sharedWithIds.map(participantName).join(', ') }}
+                  </span>
+                </li>
+              </ul>
+            </td>
+          </tr>
+        </template>
       </tbody>
     </table>
 
@@ -340,6 +384,52 @@ async function handleDelete(expense) {
 .expense-table__shared {
   color: var(--ink-soft);
   font-size: 0.9rem;
+}
+
+.expense-table__items-toggle {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0.1rem 0.45rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.expense-table__items-toggle[aria-expanded='true'] {
+  border-style: solid;
+  color: var(--forint);
+}
+
+.expense-table__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.expense-table__items li {
+  display: grid;
+  grid-template-columns: 1fr auto 1.4fr;
+  gap: var(--space-3);
+  padding: 0.2rem 0;
+  font-size: 0.88rem;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.expense-table__items li:last-child {
+  border-bottom: none;
+}
+
+.expense-table__item-name {
+  font-weight: 600;
+}
+
+.expense-table__item-shared {
+  color: var(--ink-soft);
 }
 
 .expense-table__row {
@@ -492,6 +582,32 @@ async function handleDelete(expense) {
 
   .expense-table__row.is-fresh {
     animation-name: expense-arrive-card;
+  }
+
+  /* A tétel-alsor a kártyás nézetben a saját kiadás-kártyájának
+     folytatása: felül nincs szegély, és a fölötte lévő kártya alsó
+     margóját visszahúzzuk, hogy összeérjenek. */
+  .expense-table__items-row {
+    display: block;
+    margin-top: calc(-1 * var(--space-4));
+    margin-bottom: var(--space-4);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-top: none;
+    padding: 0 var(--space-3) var(--space-3);
+  }
+
+  .expense-table__table .expense-table__items-row td {
+    display: block;
+    padding: 0;
+  }
+
+  .expense-table__items li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .expense-table__item-shared {
+    grid-column: 1 / -1;
   }
 }
 
