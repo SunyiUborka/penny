@@ -708,10 +708,14 @@ jelzővel (`toPendingExpense`/`toPendingUpdate`), és **nem szerkeszthető** —
 szerkesztés a szervertől kapott valódi kiadás-azonosítóra támaszkodik, ami
 egy még fel nem töltött sornak nincs (`ExpenseTable.vue`). A pending sor
 forint-értékét (`baseAmountMinor`) a kliens **ugyanazzal** a
-`convertMinorAmount` függvénnyel számolja, amit a szerver `buildExpenseData`-
-ja is használ (`computePendingBaseAmountMinor`) — enélkül egy devizás
-sorbaálló kiadás rossz összeggel torzítaná az egyenlegeket, amíg fel nem
-töltődik.
+`convertExpenseAmounts` függvénnyel számolja, amit a szerver
+`buildExpenseData`-ja is használ (`computePendingAmounts`,
+`stores/expenses.js`) — enélkül egy devizás sorbaálló kiadás rossz összeggel
+torzítaná az egyenlegeket, amíg fel nem töltődik. Tételes számlánál ez a
+tételekre is ráírja a forint-értéket, mert a `computeSettlement` bemeneti
+sémája ezt tételenként megköveteli — egy tétel-forint-érték nélküli
+sorbanálló számla az egész esemény elszámolását hibaállapotba vinné, amíg
+fel nem töltődik.
 
 **A duplikációt a `clientId` mező zárja ki** (Task 1,
 `packages/shared/src/schemas/expense.js`, `expenseService.createExpense`): a szerver egy már
@@ -997,11 +1001,13 @@ components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszá
   és szerveren, tehát egy backend-kontraktus-törés azonnal, fejlesztés
   közben kiderül.
 - **`ExpenseModal.vue`**: a legösszetettebb komponens. Élőben számol
-  HUF-előnézetet (`convertMinorAmount` a shared csomagból, ugyanazzal a
+  HUF-előnézetet (`convertExpenseAmounts` a shared csomagból, ugyanazzal a
   logikával, mint a backend), figyeli a "dirty" állapotot (nem mentett
   módosítás esetén megerősítést kér záráskor), fókusz-csapdát valósít meg
   (Tab/Shift+Tab a modálon belül marad, Escape zár), és pénznemváltáskor
-  automatikusan újra lekéri az árfolyamot.
+  automatikusan újra lekéri az árfolyamot. A „Tételes felosztás” jelölőnégyzet
+  tételsorokra bontja az űrlapot: tételenként külön megnevezéssel, összeggel
+  és osztozó-választással.
   A ténylegesen elmentett `baseAmountMinor`-t viszont mindig a backend
   számolja újra — a kliens preview csak UX célt szolgál.
 - **Reszponzív táblázatok**: `ExpenseTable.vue`, `EventsListView.vue` és
@@ -1009,6 +1015,9 @@ components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszá
   (`@media max-width: 640px`) CSS-sel kártyás nézetté alakítja
   (`data-label` attribútumok + `::before` pszeudoelem a mezőnevekhez) —
   nincs külön mobil komponens, ugyanaz a markup két megjelenésben.
+  `ExpenseTable.vue` a tételes kiadásokat egy lenyitható tétel-alsorral
+  jelzi (`{N} tétel` gomb, `expandedIds`), ami tételenként a megnevezést,
+  az osztozókat és az összeget listázza.
 - **Vizuális identitás**: kasszakönyv/nyugta téma (torn-receipt kártyák,
   "stamp" jelvények, tabular monospace pénzösszegek, banknote-zöld/pecsét-piros
   paletta) — lásd `apps/web/src/assets/theme.css`.
