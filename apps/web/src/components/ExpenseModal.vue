@@ -838,6 +838,12 @@ onUnmounted(() => {
   border: none;
   padding: 0;
   margin: var(--space-4) 0;
+  /* A `<fieldset>` böngésző-alapértelmezett `min-width: min-content`-je nem
+     engedi a tartalmat a min-content szélessége alá zsugorodni. A chipek
+     eddig elrejtették ezt (tördelnek, tehát kis min-content), a tételsor
+     viszont széles: keskeny nézetben a fieldset kilógott a modálból, és a
+     sor vízszintesen elcsúszott. */
+  min-width: 0;
 }
 
 .modal__fieldset legend {
@@ -1089,9 +1095,26 @@ onUnmounted(() => {
   padding: 0.55em 0;
 }
 
+/* Telefonon a tételsor két sorba rendeződik: a megnevezés kap egy teljes
+   sort, alatta az összeg és a törlés. Egy sorban a megnevezésre ~130 px
+   maradna, amiben a helykitöltő is elcsonkulna — a beírt szöveg pedig
+   gépelés közben folyton kicsúszna a mező elejéről. */
 @media (max-width: 640px) {
+  .expense-item__row {
+    flex-wrap: wrap;
+  }
+
+  .expense-item__description {
+    flex: 1 0 100%;
+  }
+
+  /* `min-width: 0` nélkül a szám-input automatikus minimális mérete (a saját
+     min-content szélessége) nem engedi zsugorodni, és a törlés gomb egy
+     harmadik sorba esik. */
   .expense-item__amount {
-    width: 6rem;
+    width: auto;
+    flex: 1;
+    min-width: 0;
   }
 }
 </style>
