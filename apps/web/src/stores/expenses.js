@@ -11,6 +11,7 @@ import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
 import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
+import { completedUploadCount, isSyncRunning } from '../offline/sync.js';
 import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
@@ -264,10 +265,28 @@ export const useExpensesStore = defineStore('expenses', {
      * az outbox visszajátszása nem történhet meg: az `isCurrentEvent`
      * ellenőrzés (a `fetchExpenses` mintájára) mindkét lépés előtt kizárja
      * ezt, nem csak a lista beírása előtt.
+     *
+     * A szinkron-motorral is versenyezhet: mindketten a `visibilitychange`-re
+     * indulnak, tehát a lista `GET`-je könnyen a feltöltés ELŐTTI
+     * adatbázis-állapotot tükrözi, miközben a válasza a motor
+     * `applyUploadResult`-ja UTÁN kerülne alkalmazásra — az pedig letörölné a
+     * frissen feltöltött, valódi sort (feltöltött törlésnél visszahozná a
+     * törölt sort), és mivel az outbox-bejegyzés addigra nincs meg, a
+     * `loadPending` sem játszaná vissza. Épp az a lyuk, aminek a bezárására az
+     * `applyUploadResult` készült. Ezért a válasz alkalmazása előtt
+     * megkérdezzük a motort (`isSyncRunning`, `completedUploadCount`): ha
+     * közben feltöltés-eredmény landolt, vagy még fut egy kör, ez a válasz
+     * elavult lehet — ilyenkor egyszer újrapróbáljuk (a második lekérés már a
+     * feltöltés utáni állapotot látja, és a cache-t is helyrehozza), és ha
+     * akkor is ütközünk, inkább nem írunk semmit: a képernyőn lévő lista már
+     * tartalmazza a motor eredményét.
      * @param {string} eventId
+     * @param {number} [attempt] belső: hányadik próbálkozás (a feltöltéssel
+     * való ütközés miatt legfeljebb egyszer próbáljuk újra)
      */
-    async refreshQuietly(eventId) {
+    async refreshQuietly(eventId, attempt = 0) {
       try {
+        const uploadsBefore = completedUploadCount();
         // `refreshIntoCache`, nem közvetlen `apiClient`: a sikeres csendes
         // frissítés a cache-t is felírja, és az `expenses:<eseményId>`
         // kulcsot frissnek jelöli. Enélkül minden helyreállási út (stream
@@ -287,6 +306,16 @@ export const useExpensesStore = defineStore('expenses', {
           // Közben másik eseményre navigáltunk (ugyanaz a helyzet, mint a
           // `fetchExpenses`-nél): ez a válasz elkésett, nem írhatja felül,
           // ami épp látszik.
+          return;
+        }
+        if (isSyncRunning() || completedUploadCount() !== uploadsBefore) {
+          // Ütközés a szinkron-motorral (lásd a fenti magyarázatot): ez a
+          // lista a feltöltés előtti állapotot tükrözheti. Az ellenőrzés és a
+          // lenti beírás között nincs `await`, tehát a motor nem tud
+          // közbeszúrni.
+          if (attempt === 0) {
+            await this.refreshQuietly(eventId, attempt + 1);
+          }
           return;
         }
         this.expenses = expenses;

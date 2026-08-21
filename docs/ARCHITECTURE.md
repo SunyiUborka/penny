@@ -776,6 +776,21 @@ listáz, és a két tételenkénti művelet **eltérő körre** szól:
   eldobni nem lehetett: a hibás egyenleg ott állt a képernyőn, amíg a
   tétel fel nem töltődött.
 
+A motor és a kiadáslista **csendes frissítése ugyanarra a
+`visibilitychange`-re indul**, tehát versenyeznek: a lista `GET`-je könnyen a
+feltöltés ELŐTTI adatbázis-állapotot tükrözi, miközben a válasza a motor
+`applyUploadResult`-ja UTÁN kerülne alkalmazásra — az pedig letörölné a
+frissen feltöltött, valódi sort (feltöltött törlésnél visszahozná a törölt
+sort), és mivel az outbox-bejegyzés addigra nincs meg, a `loadPending` sem
+játszaná vissza: pont az a lyuk, aminek a bezárására az `applyUploadResult`
+készült. Ezért a `refreshQuietly` a válasz alkalmazása előtt megkérdezi a
+motort (`isSyncRunning`, `completedUploadCount` — a lapszintű, monoton
+feltöltés-számláló KÜLÖNBSÉGE mondja meg, hogy közben landolt-e eredmény).
+Ütközés esetén egyszer újrapróbálja a lekérést, és ha akkor is ütközik,
+inkább nem ír semmit: a képernyőn lévő lista már tartalmazza a motor
+eredményét. Az ellenőrzés és a lista beírása között szándékosan **nincs
+`await`**, különben a motor épp közéjük tudna szúrni.
+
 Az eldobás megerősítése megnevezi a konkrét tételt, és **nem fut le, amíg
 egy feltöltési kör folyik** (`isSyncRunning`): a motor a kör elején
 készített listából dolgozik, tehát egy épp feltöltés alatt lévő tétel akkor
