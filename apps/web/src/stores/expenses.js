@@ -9,7 +9,7 @@ import {
 } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
-import { fetchWithCache } from '../offline/cache.js';
+import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
@@ -248,8 +248,20 @@ export const useExpensesStore = defineStore('expenses', {
      */
     async refreshQuietly(eventId) {
       try {
-        const expenses = await apiClient.get(`/events/${eventId}/expenses`, {
-          schema: expenseListResponseSchema,
+        // `refreshIntoCache`, nem közvetlen `apiClient`: a sikeres csendes
+        // frissítés a cache-t is felírja, és az `expenses:<eseményId>`
+        // kulcsot frissnek jelöli. Enélkül minden helyreállási út (stream
+        // újrakapcsolódás, előtérbe kerülés, lehúzásos frissítés) elkerülte
+        // a `setFresh`-t, tehát az offline sáv a munkamenet végéig azt
+        // állította, hogy elavult adat látszik — miközben a felhasználó
+        // szeme előtt frissült a lista (lásd a végső review I4 pontját).
+        // Bukáskor dob, és a `catch` hagyja a láthatót: itt továbbra sincs
+        // cache-tartalék, tehát a képernyőn lévő listát nem cserélheti le
+        // egy nála régebbi másolat.
+        const expenses = await refreshIntoCache({
+          key: `expenses:${eventId}`,
+          request: () =>
+            apiClient.get(`/events/${eventId}/expenses`, { schema: expenseListResponseSchema }),
         });
         if (!isCurrentEvent(eventId)) {
           // Közben másik eseményre navigáltunk (ugyanaz a helyzet, mint a

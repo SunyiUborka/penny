@@ -596,6 +596,18 @@ nélküliek (`events.js` `refreshQuietly`/`refreshEvent`, `expenses.js`
 csak lecserélhetné a láthatót egy régebbi másolatra. Ezek a hibát elnyelik
 és a láthatót hagyják.
 
+**A sikeres csendes frissítés viszont ugyanúgy írja a cache-t és jelöli
+frissnek a kulcsot**, mint a `fetchWithCache` — ezt a `refreshIntoCache`
+(`offline/cache.js`) végzi, és minden csendes frissítésnek ezen kell
+mennie, nem közvetlenül az `apiClient`-en. Ok: a `setFresh` egyedül a
+`fetchWithCache`-ből futott, viszont **minden helyreállási út** (stream
+újrakapcsolódás, előtérbe kerülés, lehúzásos frissítés) csendes frissítést
+hív. Egy egyszer elavultra jelölt kulcs így a munkamenet végéig elavult
+maradt: a felhasználó látta frissülni a listát, miközben a sáv továbbra is
+azt állította, hogy régi adatot néz. **A „nincs cache-tartalék” tehát nem
+azt jelenti, hogy a cache-t ne is frissítenénk** — a kettő két külön
+kérdés (mit MUTATUNK bukáskor, illetve mit ÍRUNK sikerkor).
+
 A cache egy app-frissítés után is biztonságos: `readCache` a beolvasott
 értéket újra a hívó Zod sémájával validálja, és egy már nem illeszkedő
 rekordot inkább eldob (törli), mint hibásan visszaadna.
