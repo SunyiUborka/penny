@@ -30,16 +30,23 @@ async function load() {
 
 onMounted(load);
 
-// A várakozó+elakadt darabszám az egyetlen jel, ami a `refreshCounts()`
+// A várakozó és az elakadt darabszám az egyetlen jel, ami a `refreshCounts()`
 // minden hívásakor (minden outbox-mutáción, tehát egy háttérben — nem
 // erről a képernyőről — indított szinkronon is) frissül. Erre iratkozunk
 // fel ahelyett, hogy saját értesítési csatornát vagy pollozást vezetnénk
-// be: ha a szám változik, a lista biztosan elavult, újra kell tölteni. A
-// figyelő a komponenssel együtt (a `<script setup>` hatókörében) jön
-// létre, ezért Vue automatikusan leállítja, amikor a képernyő elhagyásra
+// be: ha valamelyik szám változik, a lista biztosan elavult, újra kell
+// tölteni. A figyelő a komponenssel együtt (a `<script setup>` hatókörében)
+// jön létre, ezért Vue automatikusan leállítja, amikor a képernyő elhagyásra
 // kerül — nincs szükség kézi leiratkozásra.
+//
+// A kettőt PÁRBAN figyeljük, nem az ÖSSZEGÜKET. A `markFailed` egy tételt
+// várakozóból elakadtba tesz: `pending 1→0`, `failed 0→1` — az összeg
+// változatlan, tehát az összegre kötött figyelő nem sült el. A képernyő így
+// tovább mutatta a „Feltöltésre vár" feliratot, „Újra"/„Eldobás" nélkül, egy
+// véglegesen elakadt tételre: pont az az egy képernyő állított valótlant,
+// aminek egyetlen dolga az igazat mondani a sorról (végső review I7).
 watch(
-  () => offlineStore.pendingCount + offlineStore.failedCount,
+  () => [offlineStore.pendingCount, offlineStore.failedCount],
   () => {
     load();
   },
