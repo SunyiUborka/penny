@@ -209,11 +209,13 @@ aktív, IndexedDB-re épül.
   állapotukban; a felület egy halk sávval jelzi, hogy „Offline — utoljára
   frissítve: …”.
 - Kiadás felvehető, módosítható, törölhető. A sorbanállított tétel a listában
-  „függőben” jelzéssel és a forint-oszlopában egy `≈` előtaggal jelenik meg
-  (ez minden pending sorra vonatkozik, a forintban rögzítettre is — a
-  végleges érték csak feltöltéskor dől el), és nem szerkeszthető, amíg fel
-  nem töltődött — a szerkesztés a szervertől kapott valódi
-  kiadás-azonosítóra támaszkodik, ami egy még függőben lévő sornak nincs.
+  „függőben” jelzéssel jelenik meg, és **devizás** kiadás esetén a
+  forint-oszlopa elé `≈` előtag kerül: ott a forint-érték egy esetleg
+  elavult árfolyammal készült, a végleges összeg feltöltéskor dől el. A
+  forintban rögzített tételnél nincs `≈` — annak az összege pontos, nem
+  történt átváltás. A függőben lévő sor nem szerkeszthető, amíg fel nem
+  töltődött — a szerkesztés a szervertől kapott valódi kiadás-azonosítóra
+  támaszkodik, ami egy még függőben lévő sornak nincs.
   Elírás esetén a Szinkronizálás képernyőn eldobható, és újra felvehető.
 - Az Elszámolás fül offline is számol, mert a betöltött (és a még
   sorbanálló) kiadáslistából dolgozik — a fel nem töltött tételek **is**
@@ -281,9 +283,11 @@ meg.
       korábbi cache-elt EUR→HUF árfolyam, az űrlap kézi árfolyam-megadást
       kér — adj meg egyet), majd zárd be teljesen az appot (ne csak
       háttérbe küldd), és indítsd újra — továbbra is offline. Bizonyíték:
-      mindkét sor „függőben” jelzéssel és `≈` előtaggal újra megjelenik (az
-      `outbox` IndexedDB store túlélte az újraindítást), és egyik sor sem
-      nyitható szerkesztésre kattintással.
+      mindkét sor „függőben” jelzéssel újra megjelenik (az `outbox` IndexedDB
+      store túlélte az újraindítást), az EUR-os sor forint-oszlopában `≈`
+      előtaggal, a forintos sorban `≈` NÉLKÜL (ott nem történt átváltás,
+      tehát nincs mit becsültnek jelölni), és egyik sor sem nyitható
+      szerkesztésre kattintással.
 - [ ] **Offline elszámolás.** Ugyanebben az állapotban nyisd meg az
       Elszámolás fület. Bizonyíték: az egyenlegek és az utalás-lista a két
       függőben lévő kiadást is figyelembe veszi, és megjelenik a „még fel nem

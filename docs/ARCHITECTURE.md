@@ -746,10 +746,16 @@ meglepő lehet, ha valaki a listát nézve nem veszi észre, hogy egy sor még
 legalább egy fel nem töltött kiadás.
 
 A per-soros jelzés más komponens dolga: az `ExpenseTable.vue` a
-kiadáslistában minden `pending` sor forint-oszlopa elé `≈` előtagot tesz —
-**a pénznemtől függetlenül, a forintban rögzített pending soroknál is**,
-nem csak a devizásoknál. A `SettlementPanel` maga nem renderel
-kiadásonkénti sort, tehát nem is ő teszi ki ezt a jelölést.
+kiadáslistában a `pending` sorok forint-oszlopa elé `≈` előtagot tesz — de
+**csak ott, ahol a sor pénzneme nem a `SETTLEMENT_CURRENCY`**, vagyis ahol
+tényleges árfolyam-átváltás történt. Egy forintban rögzített pending sor
+összege pontos (nincs átváltás, nincs becslés), ott a jelölés azt állította
+volna, hogy egy pontos szám becsült. A „még nem töltődött fel" tényt a
+„függőben” jelzés és — az egyenlegekre — a `SettlementPanel`
+figyelmeztetése mondja ki; a `≈` nem ezt jelenti, hanem azt, hogy a
+forint-érték egy esetleg elavult árfolyammal készült. A `SettlementPanel`
+maga nem renderel kiadásonkénti sort, tehát nem is ő teszi ki ezt a
+jelölést.
 
 ### 10.5 Szinkron-motor
 
