@@ -531,6 +531,23 @@ onUnmounted(() => {
       aria-modal="true"
       aria-labelledby="expense-modal-title"
     >
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="Bezárás"
+        :disabled="saving"
+        @click="attemptClose"
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path
+            d="M4 4l8 8M12 4l-8 8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
       <span class="eyebrow">Kiadás</span>
       <h2 id="expense-modal-title">{{ isEditMode ? 'Kiadás szerkesztése' : 'Új kiadás' }}</h2>
       <form @submit.prevent="handleSubmit">

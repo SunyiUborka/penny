@@ -283,6 +283,36 @@ button {
   background: var(--paper-raised);
 }
 
+/* Modal-bezáró: minden modal jobb felső sarkában, a nyugta-perforáción belül. */
+.modal-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .modal-close:hover:not(:disabled) {
+    border-color: var(--rule);
+    color: var(--ink);
+  }
+}
+
+.modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .field {
   display: flex;
   flex-direction: column;

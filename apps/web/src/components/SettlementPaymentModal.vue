@@ -273,6 +273,23 @@ onUnmounted(() => {
       aria-modal="true"
       aria-labelledby="settlement-payment-title"
     >
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="Bezárás"
+        :disabled="saving"
+        @click="emit('cancel')"
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path
+            d="M4 4l8 8M12 4l-8 8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
       <div class="payment-modal__head">
         <div>
           <span class="eyebrow">Kiegyenlítés</span>
@@ -492,6 +509,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: var(--space-4);
   margin-bottom: var(--space-4);
+  padding-right: 2.25rem;
 }
 
 .payment-modal__rate-row {

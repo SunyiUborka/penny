@@ -206,12 +206,18 @@ async function handleLogout() {
 
   .app-nav__mark {
     flex: 1;
+    order: 1;
+  }
+
+  .app-nav__theme-toggle {
+    order: 2;
   }
 
   .app-nav__menu-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    order: 3;
   }
 
   .app-nav__logout {

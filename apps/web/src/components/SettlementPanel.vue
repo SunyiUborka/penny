@@ -1,11 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Share } from '@capacitor/share';
 import { computeSettlement, formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import { useSettlementPaymentsStore } from '../stores/settlementPayments.js';
-import { isNativeApp } from '../utils/platform.js';
 import { formatDate } from '../utils/format.js';
+import RowMenu from './RowMenu.vue';
 import SettlementPaymentModal from './SettlementPaymentModal.vue';
 
 const props = defineProps({
@@ -69,8 +68,6 @@ const loading = computed(() => expensesStore.loading || paymentsStore.loading);
 const loadError = computed(
   () => expensesStore.error !== null || paymentsStore.error !== null || settlement.value === null,
 );
-const shareSupported = Boolean(globalThis.navigator?.share) || isNativeApp();
-
 /** A jegyzék sorai; a nyitottak (hátralékkal) a modal választéka. */
 const planRows = computed(() => settlement.value?.transfers ?? []);
 const openRows = computed(() => planRows.value.filter((row) => row.remainingMinor > 0));
@@ -205,34 +202,6 @@ async function handleUndo(payment) {
     actionError.value = error.message ?? 'Nem sikerült visszavonni a kiegyenlítést.';
   }
 }
-
-/**
- * A megosztható összefoglaló: ki fizet kinek mennyit. A már rendezett sorok
- * nem tartoznak bele — a címzettnek az a hasznos, mi van még hátra.
- * @returns {string}
- */
-function buildShareText() {
-  const lines = openRows.value.map((row) => {
-    return `${participantName(row.fromId)} → ${participantName(row.toId)}: ${money(row.remainingMinor)}`;
-  });
-  return [`${props.event.name} — elszámolás`, '', ...lines].join('\n');
-}
-
-async function handleShare() {
-  try {
-    await Share.share({
-      title: `${props.event.name} — elszámolás`,
-      text: buildShareText(),
-      url: globalThis.location?.href,
-      dialogTitle: 'Elszámolás megosztása',
-    });
-  } catch {
-    // Androidon a megosztó lap bezárása is hibaként jön vissza, és a plugin
-    // nem ad megbízható hibakódot, amivel ezt egy valódi küldési hibától meg
-    // lehetne különböztetni — ezért itt szándékosan nem jelzünk semmit: egy
-    // hibaüzenet minden egyszerű bezáráskor téves riasztás lenne.
-  }
-}
 </script>
 
 <template>
@@ -353,15 +322,6 @@ async function handleShare() {
           <span class="stamp settlement__settled-stamp">Egyenleg rendezve</span>
           <p>A jegyzék minden sora kifizetve.</p>
         </div>
-
-        <button
-          v-if="shareSupported && openRows.length > 0"
-          type="button"
-          class="btn settlement__share"
-          @click="handleShare"
-        >
-          Megosztás
-        </button>
       </template>
 
       <div class="settlement__payments-head">
@@ -418,20 +378,22 @@ async function handleShare() {
             <span class="money money--settle settlement__stub-amount">
               {{ money(entry.payment.amountMinor, entry.payment.currency) }}
             </span>
-            <button
-              type="button"
-              class="btn btn--ghost btn--small"
-              @click="openEditModal(entry.payment)"
-            >
-              Szerkesztés
-            </button>
-            <button
-              type="button"
-              class="btn btn--danger btn--small"
-              @click="handleUndo(entry.payment)"
-            >
-              Visszavonás
-            </button>
+            <RowMenu label="Kiegyenlítés műveletei">
+              <button
+                type="button"
+                class="btn btn--ghost btn--small"
+                @click="openEditModal(entry.payment)"
+              >
+                Szerkesztés
+              </button>
+              <button
+                type="button"
+                class="btn btn--danger btn--small"
+                @click="handleUndo(entry.payment)"
+              >
+                Visszavonás
+              </button>
+            </RowMenu>
           </span>
         </li>
       </ul>
@@ -508,10 +470,6 @@ async function handleShare() {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-}
-
-.settlement__share {
-  margin-top: var(--space-4);
 }
 
 .settlement__coupon {
@@ -781,19 +739,37 @@ async function handleShare() {
     color: var(--settle);
   }
 
-  .settlement__coupon,
-  .settlement__stub {
+  .settlement__coupon {
     flex-wrap: wrap;
   }
 
-  .settlement__coupon-right,
-  .settlement__stub-right {
+  .settlement__coupon-right {
     flex: 1 0 100%;
     justify-content: space-between;
   }
 
+  .settlement__stub {
+    align-items: center;
+    padding-right: var(--space-2);
+  }
+
+  .settlement__stub .settlement__coupon-parties {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .settlement__stub .settlement__coupon-arrow {
+    margin: 0 0.3em;
+  }
+
   .settlement__stub-right {
     gap: var(--space-2);
+  }
+
+  .settlement__stub-amount {
+    font-size: 0.95rem;
   }
 }
 </style>

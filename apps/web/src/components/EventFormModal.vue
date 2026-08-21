@@ -60,6 +60,23 @@ function handleSubmit() {
       aria-modal="true"
       :aria-label="isEditMode ? 'Esemény szerkesztése' : 'Új esemény'"
     >
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="Bezárás"
+        :disabled="saving"
+        @click="emit('cancel')"
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+          <path
+            d="M4 4l8 8M12 4l-8 8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
       <span class="eyebrow">{{ isEditMode ? 'Szerkesztés' : 'Új bejegyzés' }}</span>
       <h2>{{ isEditMode ? 'Esemény szerkesztése' : 'Új esemény' }}</h2>
       <form @submit.prevent="handleSubmit">
