@@ -1005,9 +1005,19 @@ components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszá
   logikával, mint a backend), figyeli a "dirty" állapotot (nem mentett
   módosítás esetén megerősítést kér záráskor), fókusz-csapdát valósít meg
   (Tab/Shift+Tab a modálon belül marad, Escape zár), és pénznemváltáskor
-  automatikusan újra lekéri az árfolyamot. A „Tételes felosztás” jelölőnégyzet
-  tételsorokra bontja az űrlapot: tételenként külön megnevezéssel, összeggel
-  és osztozó-választással.
+  automatikusan újra lekéri az árfolyamot. A számlatípust egy fülsáv választja
+  (`Egyszerű` / `Tételes`, `tablist`/`tab`/`tabpanel` szerepekkel): tételes
+  módban az összeg-mező helyére tételsorok kerülnek, tételenként külön
+  megnevezéssel, összeggel és osztozó-választással, az összeg-mező helyén
+  pedig a csak olvasható végösszeg. A fülváltás nem kérdez és nem dob el
+  adatot: egyszerű módban a tételsorok a memóriában maradnak, csak nem
+  kerülnek a mentésbe (azt kizárólag az aktív fül dönti el), és a
+  visszaváltás érintetlenül visszaadja őket. Kivétel, ha a felhasználó
+  időközben átírta az összeget: akkor a megtartott bontás már nem érvényes rá,
+  ezért a beírt összeg nyer, és egyetlen tétellel indul — így egy pénzösszeg
+  sosem változik meg magától. Ugyanezért számít a „dirty" lenyomatba a
+  tétellista csak tételes módban: enélkül egy odavissza fülváltás után az
+  űrlap tévesen nem mentett módosítást jelezne.
   A ténylegesen elmentett `baseAmountMinor`-t viszont mindig a backend
   számolja újra — a kliens preview csak UX célt szolgál.
 - **Reszponzív táblázatok**: `ExpenseTable.vue`, `EventsListView.vue` és

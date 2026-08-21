@@ -99,11 +99,18 @@ function snapshot() {
     exchangeRate: exchangeRate.value,
     sharedWithIds: [...sharedWithIds.value].sort(),
     itemized: itemized.value,
-    items: items.value.map((item) => ({
-      description: item.description,
-      amountMajor: item.amountMajor,
-      sharedWithIds: [...item.sharedWithIds].sort(),
-    })),
+    // A tételek CSAK tételes módban tartoznak a lenyomatba, mert a lenyomat
+    // azt írja le, ami mentésre kerülne. Egyszerű módban a sorok a memóriában
+    // maradnak (lásd `selectMode`) — ha itt is beszámítanának, egy odavissza
+    // fülváltás után az űrlap „nem mentett módosítást" jelezne, és a bezárás
+    // hiába kérdezne rá.
+    items: itemized.value
+      ? items.value.map((item) => ({
+          description: item.description,
+          amountMajor: item.amountMajor,
+          sharedWithIds: [...item.sharedWithIds].sort(),
+        }))
+      : [],
   });
 }
 
@@ -188,9 +195,13 @@ const itemsTotalLabel = computed(() =>
  * Számlatípus-váltás a fülsávról. A `mode` a két fülnek felel meg:
  * `'simple'` (egy összeg) és `'itemized'` (tételes).
  *
- * A már aktív fül újbóli választása no-op — enélkül egy második kattintás a
- * „Tételes" fülön eldobná a beírt tételeket és újrakezdené egyetlen üres
- * sorral.
+ * A váltás SOSEM kérdez, mert nincs mit elveszíteni: egyszerűre váltásnál a
+ * tételsorok a memóriában maradnak, csak nem kerülnek a mentésbe (azt
+ * kizárólag az aktív fül dönti el, lásd `handleSubmit`). Egy megerősítő ablak
+ * felvitel közben puszta zaj lenne — a korábbi változat még akkor is kérdezett,
+ * amikor a „Tételes" fül egyetlen, üres sora állt csak ott.
+ *
+ * A már aktív fül újbóli választása no-op.
  * @param {'simple' | 'itemized'} mode
  */
 function selectMode(mode) {
@@ -199,21 +210,23 @@ function selectMode(mode) {
     return;
   }
   if (!wantItemized) {
-    if (
-      items.value.length > 0 &&
-      !window.confirm('A tételbontás elveszik, a végösszeg egyetlen összegként marad. Folytatod?')
-    ) {
-      return;
-    }
+    // A tételsorokat MEGTARTJUK — a visszaváltás így pontosan visszaadja őket.
     amountMajor.value =
       itemsTotalMinor.value > 0 ? itemsTotalMinor.value / 10 ** currencyExponent.value : null;
-    items.value = [];
     itemized.value = false;
     return;
   }
-  // Tételesre váltásnál a már beírt összeg egyetlen tételbe kerül, a számla
-  // minden résztvevőjével — a „közös" tétel. Így semmi nem veszik el.
-  items.value = [createItem({ amountMajor: amountMajor.value })];
+  // Visszaváltás: ha a megtartott bontás összege még egyezik az összeg-mezővel,
+  // a sorok érintetlenül visszatérnek. Ha viszont a felhasználó időközben
+  // átírta az összeget, akkor a bontás már nem érvényes rá — ilyenkor a BEÍRT
+  // ÖSSZEG nyer, és egyetlen tétellel indulunk. Így egy pénzösszeg sosem
+  // változik meg magától: a felület mindig azt a számot tartja meg, amit a
+  // felhasználó legutóbb látott és beírt.
+  const retainedMatchesAmount =
+    items.value.length > 0 && itemsTotalMinor.value === (amountMinor.value ?? 0);
+  if (!retainedMatchesAmount) {
+    items.value = [createItem({ amountMajor: amountMajor.value })];
+  }
   itemized.value = true;
 }
 
