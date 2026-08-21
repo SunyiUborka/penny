@@ -180,9 +180,11 @@ Sikeres `release:mobile` után az aláírt APK itt jön létre:
 `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
 
 Minden kiadás előtt kézzel emeld a `versionCode` értékét az
-`apps/mobile/android/app/build.gradle`-ben (a `versionName` opcionális, de
-érdemes követni) — a Play Store-on kívüli, kézi telepítésnél is ez dönti el,
-hogy egy új APK „frissítésnek" számít-e a régi fölött.
+`apps/mobile/android/app/build.gradle`-ben — a Play Store-on kívüli, kézi
+telepítésnél is ez dönti el, hogy egy új APK „frissítésnek" számít-e a régi
+fölött. A `versionName` a `versionCode`-ot követi `0.x` alakban, mert a
+projekt még nem érte el az első release-t; a `versionCode` viszont sosem
+csökkenthető, azt az Android tiltja.
 
 ### Aláíró kulcs
 
