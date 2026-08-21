@@ -5,7 +5,7 @@ import {
   currencyCodeSchema,
   exchangeRateStringSchema,
 } from '../schemas/money.js';
-import { getCurrencyExponent } from './exponents.js';
+import { getCurrencyExponent, SETTLEMENT_CURRENCY } from './exponents.js';
 
 const convertMinorAmountInputSchema = z.object({
   amountMinor: amountMinorSchema,
@@ -42,4 +42,71 @@ export function convertMinorAmount(input) {
   const result = new Decimal(amountMinor).times(rate).times(scale);
 
   return result.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+}
+
+const convertExpenseAmountsInputSchema = z
+  .object({
+    amountMinor: amountMinorSchema.positive(),
+    items: z
+      .array(z.object({ amountMinor: amountMinorSchema.positive() }).passthrough())
+      .min(1)
+      .optional(),
+    currency: currencyCodeSchema,
+    exchangeRate: exchangeRateStringSchema,
+  })
+  // A hívók teljes kiadás-payloadot adnak át (dátum, fizető, osztozók is
+  // benne van) — a séma alapból eldobja az ismeretlen kulcsokat, tehát nem
+  // kell szűrni a hívási helyeken.
+  .passthrough();
+
+/**
+ * Egy kiadás (és tételei) forint-összegének kiszámítása. Ez a **pénzlogika
+ * egyetlen helye** erre a számításra: a backend `buildExpenseData`-ja, a
+ * kliens sorbanállított-előnézete és az űrlap forint-előnézete is ezt hívja.
+ *
+ * Devizás kiadásnál minden tétel KÜLÖN váltódik a kiadás egyetlen
+ * árfolyamával, és a kiadás `baseAmountMinor`-ja a tételek forint-összegeinek
+ * ÖSSZEGE — nem a végösszeg egyszeri átváltása. Ez nem stílus kérdése: az
+ * elszámolás a `baseAmountMinor`-t írja a fizető „kifizette" oldalára, a
+ * tételekből számolt részeket pedig a tartozás oldalára. Két különböző
+ * kerekítésből néhány fillér elszivárogna, és megsérülne a
+ * `computeSettlement` invariánsa, hogy az egyenlegek összege pontosan 0.
+ *
+ * @param {{ amountMinor: number, items?: object[], currency: string, exchangeRate: string }} input
+ * @returns {{ baseAmountMinor: number, items: object[] | undefined }}
+ */
+export function convertExpenseAmounts(input) {
+  const { amountMinor, items, currency, exchangeRate } =
+    convertExpenseAmountsInputSchema.parse(input);
+
+  const toBaseAmountMinor = (minorAmount) => {
+    if (currency === SETTLEMENT_CURRENCY) {
+      return minorAmount;
+    }
+    const sourceExponent = getCurrencyExponent(currency);
+    const targetExponent = getCurrencyExponent(SETTLEMENT_CURRENCY);
+    const unscaledRate = new Decimal(exchangeRate)
+      .times(new Decimal(10).pow(sourceExponent - targetExponent))
+      .toString();
+    return convertMinorAmount({
+      amountMinor: minorAmount,
+      rate: unscaledRate,
+      sourceCurrency: currency,
+      targetCurrency: SETTLEMENT_CURRENCY,
+    });
+  };
+
+  if (!items) {
+    return { baseAmountMinor: toBaseAmountMinor(amountMinor), items: undefined };
+  }
+
+  const convertedItems = items.map((item) => ({
+    ...item,
+    baseAmountMinor: toBaseAmountMinor(item.amountMinor),
+  }));
+
+  return {
+    baseAmountMinor: convertedItems.reduce((sum, item) => sum + item.baseAmountMinor, 0),
+    items: convertedItems,
+  };
 }
