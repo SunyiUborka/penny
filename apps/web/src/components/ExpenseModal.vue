@@ -582,7 +582,7 @@ onUnmounted(() => {
               <input
                 v-model="item.description"
                 type="text"
-                class="expense-item__description"
+                class="input-line expense-item__description"
                 placeholder="Megnevezés (nem kötelező)"
                 maxlength="120"
                 :aria-label="`${index + 1}. tétel megnevezése`"
@@ -591,7 +591,7 @@ onUnmounted(() => {
               <input
                 v-model.number="item.amountMajor"
                 type="number"
-                class="money-input expense-item__amount"
+                class="input-line money-input expense-item__amount"
                 :step="amountStep"
                 min="0"
                 :aria-label="`${index + 1}. tétel összege`"

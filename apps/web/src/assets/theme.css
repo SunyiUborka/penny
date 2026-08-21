@@ -268,9 +268,15 @@ button {
   color: var(--ink-soft);
 }
 
+/* A `.input-line` ugyanez a megjelenés `.field` wrapper NÉLKÜL. Nem minden
+   beviteli mező áll címkézett `.field` blokkban: a tételsorokban egymás
+   mellett futnak, saját címke nélkül (a nevüket `aria-label` adja). A
+   megjelenésük viszont nem térhet el a többitől, és az értékek sem
+   duplikálódhatnak — ezért ugyanaz a szabály szolgálja ki mindkettőt. */
 .field input,
 .field select,
-.field textarea {
+.field textarea,
+.input-line {
   font-family: var(--font-body);
   font-size: 1rem;
   padding: 0.5em 0.6em;
@@ -283,12 +289,15 @@ button {
 
 .field input:focus,
 .field select:focus,
-.field textarea:focus {
+.field textarea:focus,
+.input-line:focus {
   border-bottom-color: var(--forint);
 }
 
 .field input[type='number'],
-.field input[type='text'].money-input {
+.field input[type='text'].money-input,
+.input-line[type='number'],
+.input-line.money-input {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
