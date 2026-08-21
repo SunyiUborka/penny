@@ -214,6 +214,7 @@ aktív, IndexedDB-re épül.
   végleges érték csak feltöltéskor dől el), és nem szerkeszthető, amíg fel
   nem töltődött — a szerkesztés a szervertől kapott valódi
   kiadás-azonosítóra támaszkodik, ami egy még függőben lévő sornak nincs.
+  Elírás esetén a Szinkronizálás képernyőn eldobható, és újra felvehető.
 - Az Elszámolás fül offline is számol, mert a betöltött (és a még
   sorbanálló) kiadáslistából dolgozik — a fel nem töltött tételek **is**
   beleszámítanak az egyenlegekbe, a devizás sorok forint-értéke pedig a
@@ -247,6 +248,13 @@ véglegesen, magáról a tételről mond nemet (érvénytelen adat, törölt ese
 „Eldobás” gombbal kezelhetők, és önmaguktól nem próbálkoznak újra. Minden más
 hiba (lejárt munkamenet, túlterhelt szerver, hálózat) a tételt egyszerűen
 várakozó állapotban hagyja a következő próbálkozásig.
+
+A Szinkronizálás képernyő a **várakozó** tételeket is eldobhatóvá teszi
+(„Újra” gombot ott nem kínál — arra vár épp). Ez az egyetlen módja egy
+offline elírt kiadás visszavonásának: a függőben lévő sor a kiadástáblában
+nem szerkeszthető, tehát ha valaki 50 000 helyett 500 000-et ütött be, itt
+tudja eldobni, és újra felvenni a helyes összeggel. Az eldobás megnevezi a
+konkrét tételt, és nem fut le, amíg egy feltöltés éppen folyik.
 
 **Fontos korlát:** az app törlése (vagy egy aláíráscsere miatti kényszerű
 újratelepítés, lásd fentebb) a még fel nem töltött, sorbanállított

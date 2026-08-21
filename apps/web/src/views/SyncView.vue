@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { listEntries, markPending, removeEntry } from '../offline/outbox.js';
-import { syncOutbox } from '../offline/sync.js';
+import { isSyncRunning, syncOutbox } from '../offline/sync.js';
 import { formatDate } from '../utils/format.js';
 import { useOfflineStore } from '../stores/offline.js';
 
@@ -93,11 +93,28 @@ function describe(entry) {
  * @param {object} entry
  */
 async function handleDiscard(entry) {
+  // Nem dobunk el tételt, amíg egy feltöltési kör fut: a motor a kör elején
+  // készített listából dolgozik, tehát egy épp feltöltés alatt lévő tétel
+  // akkor is felmehet, ha a helyi bejegyzését közben töröltük — a
+  // felhasználó pedig azt látná, hogy az eldobott kiadás mégis megjelent.
+  // Kétszer kérdezzük meg: a megerősítő párbeszéd ELŐTT (hogy ne kérdezzünk
+  // olyanról, amit nem is fogunk megtenni) és közvetlenül a törlés ELŐTT
+  // (mert a megerősítés akár másodpercekig nyitva lehet, és közben elindulhat
+  // egy háttér-szinkron). A törlés maga már szinkron döntés utáni egyetlen
+  // lépés, tehát a maradék rés elhanyagolható.
+  if (isSyncRunning()) {
+    message.value = 'Épp folyik egy feltöltés a háttérben — várj, amíg befejeződik.';
+    return;
+  }
   const confirmed = window.confirm(
     `Biztosan eldobod ezt a tételt: „${describe(entry)}” (${formatDate(entry.createdAt)})? ` +
       'Ez véglegesen elvész, és nem kerül fel a szerverre.',
   );
   if (!confirmed) {
+    return;
+  }
+  if (isSyncRunning()) {
+    message.value = 'Épp folyik egy feltöltés a háttérben — várj, amíg befejeződik.';
     return;
   }
   message.value = '';
@@ -129,8 +146,18 @@ async function handleDiscard(entry) {
             Elakadt: {{ entry.error }}
           </span>
           <span v-else class="sync__meta">Feltöltésre vár</span>
-          <span v-if="entry.status === 'failed'" class="sync__actions">
+          <span class="sync__actions">
+            <!--
+              „Újra" csak elakadt tételre: egy még várakozó tétel újrapróbálása
+              értelmetlen, hiszen épp arra vár. „Eldobás" viszont MINDKETTŐRE
+              jár. A kiadástábla azért nem engedi szerkeszteni a függőben lévő
+              sorokat, mert az ezen a képernyőn eldobható — ez az indoklás
+              addig üres volt, amíg az eldobás csak az elakadt tételekre
+              jelent meg: egy offline elírt összeget (500 000 helyett 50 000)
+              se javítani, se eldobni nem lehetett (végső review M8).
+            -->
             <button
+              v-if="entry.status === 'failed'"
               type="button"
               class="btn btn--ghost btn--small"
               :disabled="busy"

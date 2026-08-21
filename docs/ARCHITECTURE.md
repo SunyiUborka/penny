@@ -750,12 +750,25 @@ változatlan tartalommal, újraküldve is ugyanígy elbukna-e — ha a válasz
 Egy elakadt tétel önmagától sosem próbálkozik újra — ez a Szinkronizálás
 képernyő (`/sync`, `SyncView.vue`) dolga, ami csak akkor jelenik meg a
 navigációban, ha van várakozó vagy elakadt elem. A képernyő minden tételt
-listáz, de a tételenkénti „Újra” és „Eldobás” műveletet csak a `failed`
-státuszú (elakadt) tételekre kínálja fel — egy még csak várakozó (`pending`)
-tétel nem szerkeszthető és nem is dobható el, csak várni lehet rá, amíg fel
-nem töltődik vagy el nem akad. Az eldobás megerősítése megnevezi a konkrét
-tételt, a „Feltöltés most” gomb pedig becsületesen jelzi, ha a nyomás azért
-nem csinált semmit, mert egy háttérbeli szinkron már éppen folyt.
+listáz, és a két tételenkénti művelet **eltérő körre** szól:
+
+- **„Újra” csak a `failed` (elakadt) tételekre** — egy még várakozó tétel
+  újrapróbálása értelmetlen, hiszen épp arra vár.
+- **„Eldobás” mindkettőre**, a `pending` tételekre is. Ez nem
+  kényelmi kiegészítés: a kiadástábla azért nem engedi szerkeszteni a
+  függőben lévő sorokat, mert **a sor ezen a képernyőn eldobható** — amíg az
+  eldobás csak az elakadt tételekre jelent meg, ez az indoklás üres volt, és
+  egy offline elírt összeget (50 000 helyett 500 000) se javítani, se
+  eldobni nem lehetett: a hibás egyenleg ott állt a képernyőn, amíg a
+  tétel fel nem töltődött.
+
+Az eldobás megerősítése megnevezi a konkrét tételt, és **nem fut le, amíg
+egy feltöltési kör folyik** (`isSyncRunning`): a motor a kör elején
+készített listából dolgozik, tehát egy épp feltöltés alatt lévő tétel akkor
+is felmehetne, ha a helyi bejegyzését közben töröltük — a felhasználó pedig
+azt látná, hogy az eldobott kiadás mégis megjelent. A „Feltöltés most” gomb
+ugyanígy becsületesen jelzi, ha a nyomás azért nem csinált semmit, mert egy
+háttérbeli szinkron már éppen folyt.
 
 ### 10.6 Offline hidegindulás: a „már hitelesített ezen az eszközön” jelző
 
