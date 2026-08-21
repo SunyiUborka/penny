@@ -2,7 +2,7 @@ import { convertExpenseAmounts, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
-import { publishExpenseChange } from './eventBus.js';
+import { publishEventChange } from './eventBus.js';
 import { parseDateOnly } from '../utils/dateOnly.js';
 
 /**
@@ -55,7 +55,7 @@ export async function createExpense(eventId, input) {
     return existing;
   }
 
-  publishExpenseChange(eventId, { type: 'expense.created', expense: created });
+  publishEventChange(eventId, { type: 'expense.created', expense: created });
   return created;
 }
 
@@ -95,7 +95,7 @@ export async function updateExpense(id, input) {
   if (!updated) {
     throw new NotFoundError('Nincs ilyen kiadás.');
   }
-  publishExpenseChange(updated.eventId, { type: 'expense.updated', expense: updated });
+  publishEventChange(updated.eventId, { type: 'expense.updated', expense: updated });
   return updated;
 }
 
@@ -107,7 +107,7 @@ export async function deleteExpense(id) {
   if (!deleted) {
     throw new NotFoundError('Nincs ilyen kiadás.');
   }
-  publishExpenseChange(deleted.eventId, { type: 'expense.deleted', expenseId: deleted.id });
+  publishEventChange(deleted.eventId, { type: 'expense.deleted', expenseId: deleted.id });
 }
 
 /**

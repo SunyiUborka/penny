@@ -26,12 +26,21 @@ kinek mennyit fizet a kiegyenlítéshez.
   API-hívás. Az összeg legfeljebb 999999 lehet (6 számjegy). Fizető szerinti
   szűrés, mobilon kártyás nézet.
 - Élő frissítés: ha valaki más eszközön vesz fel, módosít vagy töröl egy
-  kiadást, az a nyitva hagyott kiadáslistában oldalfrissítés nélkül megjelenik
-  (Server-Sent Events). A toolbar halk jelzője mutatja, áll-e a kapcsolat.
+  kiadást vagy kiegyenlítést, az a nyitva hagyott listában oldalfrissítés
+  nélkül megjelenik (Server-Sent Events). A toolbar halk jelzője mutatja, áll-e a kapcsolat.
 - Árfolyam-lekérés külső API-ból (getgeoapi.com), napi Mongo cache-eléssel és
   hibatűrő fallbackkel a legutóbbi ismert árfolyamra.
 - Elszámolás fül: egyenlegtábla és minimalizált "ki fizet kinek mennyit"
-  lista.
+  lista (fizetési jegyzék). A két fülnek külön URL-je van
+  (`/events/<id>/kiadasok`, `/events/<id>/elszamolas`), tehát megosztható és
+  frissítés után is a nyitott fül marad.
+- Tartozás-kiegyenlítés: ha valaki tényleg átadja a pénzt, az rögzíthető —
+  bármely támogatott pénznemben, kézzel átírható árfolyammal. **Nem kiadás:**
+  nem növeli az esemény összköltségét, és a "Kifizette" oszlopot sem mozdítja,
+  csak a tartozást. A jegyzék sorai nem rendeződnek át tőle: egy fizetés a
+  saját sorát zárja, részfizetésnél a hátralék ott marad, túlfizetésnél a
+  fölösleg többlet (a szelvényen dokumentálva). Egy szelvény utólag
+  szerkeszthető és visszavonható.
 
 ## Monorepo felépítés
 

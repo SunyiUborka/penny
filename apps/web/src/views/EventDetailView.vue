@@ -6,8 +6,14 @@ import { ApiError } from '../api/client.js';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
 import { useExpensesStore } from '../stores/expenses.js';
+import { useSettlementPaymentsStore } from '../stores/settlementPayments.js';
 import { useOfflineStore } from '../stores/offline.js';
-import { eventCacheKey, expensesCacheKey, PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
+import {
+  eventCacheKey,
+  expensesCacheKey,
+  PEOPLE_CACHE_KEY,
+  settlementPaymentsCacheKey,
+} from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -18,6 +24,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 const peopleStore = usePeopleStore();
 const expensesStore = useExpensesStore();
+const paymentsStore = useSettlementPaymentsStore();
 const offlineStore = useOfflineStore();
 
 const event = ref(null);
@@ -29,7 +36,14 @@ const loading = ref(true);
  * @type {import('vue').Ref<string>}
  */
 const loadError = ref('');
-const activeTab = ref('expenses');
+const activeTab = computed(() => (route.params.tab === 'elszamolas' ? 'settlement' : 'expenses'));
+
+function selectTab(tab) {
+  router.replace({
+    name: 'event-detail',
+    params: { id: route.params.id, tab: tab === 'settlement' ? 'elszamolas' : 'kiadasok' },
+  });
+}
 const showEditModal = ref(false);
 const saving = ref(false);
 const formError = ref('');
@@ -115,7 +129,14 @@ async function refreshEventQuietly() {
  * @returns {Promise<void>}
  */
 async function refreshScreenQuietly() {
-  await Promise.all([refreshEventQuietly(), peopleStore.refreshQuietly()]);
+  await Promise.all([
+    refreshEventQuietly(),
+    peopleStore.refreshQuietly(),
+    // A kiegyenlítés-listát is itt frissítjük, nem a saját store-jából
+    // vezérelve: a kiadásokéval ellentétben nincs sorbanállítása, tehát
+    // nincs mit visszajátszani — a csendes újratöltés a teljes helyreállása.
+    paymentsStore.refreshQuietly(route.params.id),
+  ]);
 }
 
 function handleVisibility() {
@@ -150,6 +171,7 @@ onMounted(() => {
   offlineStore.setVisibleKeys([
     eventCacheKey(route.params.id),
     expensesCacheKey(route.params.id),
+    settlementPaymentsCacheKey(route.params.id),
     PEOPLE_CACHE_KEY,
   ]);
 
@@ -171,6 +193,11 @@ onMounted(() => {
       // beállította a saját `error` állapotát, itt nincs mit tenni.
     });
 
+  // A kiegyenlítések ugyanezen a streamen jönnek (a kiadás-store irányítja
+  // ide a rá vonatkozó üzeneteket), tehát külön feliratkozás nem kell — csak
+  // a kezdeti lista.
+  paymentsStore.fetchPayments(route.params.id);
+
   load();
 
   document.addEventListener('visibilitychange', handleVisibility);
@@ -178,6 +205,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   expensesStore.unsubscribe(route.params.id);
+  // Enélkül az előző esemény szelvényei látszódnának a következő esemény
+  // nézetén, amíg annak `fetchPayments`-e le nem fut (ugyanaz a szabály,
+  // amit a kiadás-store `unsubscribe`-ja követ).
+  paymentsStore.reset();
   document.removeEventListener('visibilitychange', handleVisibility);
 });
 
@@ -195,7 +226,9 @@ async function handleEdit(input) {
 }
 
 async function handleDelete() {
-  const confirmed = window.confirm('Biztosan törlöd az eseményt és minden kiadását?');
+  const confirmed = window.confirm(
+    'Biztosan törlöd az eseményt, minden kiadását és kiegyenlítését?',
+  );
   if (!confirmed) {
     return;
   }
@@ -240,7 +273,7 @@ async function handleDelete() {
           :aria-selected="activeTab === 'expenses'"
           class="ledger-tabs__tab"
           :class="{ 'is-active': activeTab === 'expenses' }"
-          @click="activeTab = 'expenses'"
+          @click="selectTab('expenses')"
         >
           Kiadások
         </button>
@@ -252,7 +285,7 @@ async function handleDelete() {
           :aria-selected="activeTab === 'settlement'"
           class="ledger-tabs__tab"
           :class="{ 'is-active': activeTab === 'settlement' }"
-          @click="activeTab = 'settlement'"
+          @click="selectTab('settlement')"
         >
           Elszámolás
         </button>
@@ -403,24 +436,34 @@ async function handleDelete() {
 
 @media (max-width: 640px) {
   .event-detail {
-    padding: var(--space-6) var(--space-4);
+    padding: var(--space-4) var(--space-3);
   }
 
   .event-detail__header {
     flex-direction: column;
     align-items: stretch;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-3) var(--space-3);
+  }
+
+  .event-detail__header h1 {
+    font-size: 1.3rem;
+  }
+
+  .event-detail__meta {
+    font-size: 0.82rem;
+    margin-top: 0.2em;
   }
 
   .event-detail__side {
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
   }
 
-  .event-detail__actions {
-    width: 100%;
-  }
-
-  .event-detail__actions .btn {
-    flex: 1;
+  .event-detail__panel {
+    padding: var(--space-3);
   }
 
   .ledger-tabs__tab {

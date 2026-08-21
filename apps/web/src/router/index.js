@@ -12,7 +12,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: LoginView, meta: { requiresAuth: false } },
     { path: '/', name: 'events', component: EventsListView, meta: { requiresAuth: true } },
     {
-      path: '/events/:id',
+      path: '/events/:id/:tab(kiadasok|elszamolas)?',
       name: 'event-detail',
       component: EventDetailView,
       meta: { requiresAuth: true },

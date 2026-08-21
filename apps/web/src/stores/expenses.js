@@ -2,9 +2,9 @@ import { defineStore } from 'pinia';
 import { ZodError } from 'zod';
 import {
   convertExpenseAmounts,
+  eventStreamMessageSchema,
   expenseListResponseSchema,
   expenseResponseSchema,
-  expenseStreamMessageSchema,
 } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
@@ -13,6 +13,7 @@ import { expensesCacheKey } from '../offline/cacheKeys.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 import { completedUploadCount, isSyncRunning } from '../offline/sync.js';
 import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
+import { useSettlementPaymentsStore } from './settlementPayments.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -421,9 +422,18 @@ export const useExpensesStore = defineStore('expenses', {
     applyStreamMessage(data) {
       let message;
       try {
-        message = expenseStreamMessageSchema.parse(JSON.parse(data));
+        message = eventStreamMessageSchema.parse(JSON.parse(data));
       } catch {
         // Értelmezhetetlen üzenetet eldobunk, nem rontjuk el vele a listát.
+        return;
+      }
+
+      // A stream eseményenkénti, tehát a kiegyenlítések is ezen jönnek — egy
+      // második EventSource csak egy második kapcsolatot nyitna ugyanahhoz az
+      // eseményhez. Ez a store a saját listáját kezeli, a szelvényeket a
+      // sajátjuk: ide csak az ÚTVONAL tartozik, nem az alkalmazás logikája.
+      if (message.type.startsWith('settlementPayment.')) {
+        useSettlementPaymentsStore().applyStreamMessage(message);
         return;
       }
 

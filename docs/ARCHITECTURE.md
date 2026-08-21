@@ -88,7 +88,7 @@ a backend `node --watch`-csal indul, mindkettő bind mountolt forráskönyvtárr
 
 ## 4. Adatmodell
 
-Négy Mongo kollekció, mindegyik `strict: 'throw'` módban (séman kívüli mező
+Öt Mongo kollekció, mindegyik `strict: 'throw'` módban (séman kívüli mező
 írása hibát dob, nem hallgatva eldobja).
 
 ```mermaid
@@ -121,6 +121,20 @@ erDiagram
         ObjectId[] sharedWithIds "min 1"
         object[] items "opcionális tételek: description?, amountMinor, baseAmountMinor, sharedWithIds"
     }
+    SettlementPayment {
+        ObjectId _id
+        ObjectId eventId
+        Date date
+        ObjectId fromId "aki fizetett"
+        ObjectId toId "aki kapta"
+        number amountMinor "átadott összeg, legkisebb egységben"
+        string currency
+        string exchangeRate "decimal string, felvitelkori"
+        string rateSource "api | manual"
+        Date rateFetchedAt
+        number baseAmountMinor "HUF-ra átváltva"
+        string note "opcionális, max 120 karakter"
+    }
     RateCache {
         string from
         string to
@@ -129,20 +143,36 @@ erDiagram
         Date fetchedAt
     }
     Event ||--o{ Expense : "tartalmazza"
+    Event ||--o{ SettlementPayment : "tartalmazza"
     Person ||--o{ Event : "résztvevője"
     Person ||--o{ Expense : "fizetője / osztozója"
+    Person ||--o{ SettlementPayment : "fizetője / kedvezményezettje"
 ```
+
+A `SettlementPayment` (kiegyenlítés) **nem kiadás**: két résztvevő közti
+pénzmozgás a tartozás rendezésére. Nem növeli az esemény összköltségét
+(`sumBaseAmountByEvent` csak a kiadásokat összegzi), nem jelenik meg a
+Kiadások fülön, és az egyenlegtábla „kifizette" oszlopához sem ér hozzá —
+saját kollekciója pontosan ezért van. Egy közös kollekcióban minden
+kiadás-lekérdezésre szűrőt kellene akasztani, és egy elfelejtett szűrő
+azonnal hamis végösszeget adna. Részletes terv:
+[`superpowers/specs/2026-08-21-tartozas-kiegyenlites-design.md`](superpowers/specs/2026-08-21-tartozas-kiegyenlites-design.md).
 
 Fontos üzleti szabályok, amiket a modell/service réteg kényszerít ki:
 
-- **Person törlés blokkolva**, ha a személy bármely esemény résztvevője, vagy
-  bármely kiadás fizetője/osztozója (`personService.deletePerson` ellenőrzi
-  mindkettőt, a hibaválaszban felsorolva az érintett eseményeket/kiadásokat).
+- **Person törlés blokkolva**, ha a személy bármely esemény résztvevője,
+  bármely kiadás fizetője/osztozója, vagy bármely kiegyenlítés
+  fizetője/kedvezményezettje (`personService.deletePerson` mindhármat
+  ellenőrzi, a hibaválaszban felsorolva az érintett rekordokat).
 - **Event résztvevő eltávolítása blokkolva**, ha az eltávolítandó személy
-  szerepel valamelyik kiadásban fizetőként vagy osztozóként
-  (`eventService.assertRemovedParticipantsNotInUse`).
-- **Event törlésekor** az összes hozzá tartozó kiadás is törlődik
-  (`eventService.deleteEvent` → `expenseRepository.deleteAllForEvent`).
+  szerepel valamelyik kiadásban fizetőként vagy osztozóként, illetve
+  valamelyik kiegyenlítésen (`eventService.assertRemovedParticipantsNotInUse`).
+- **Event törlésekor** az összes hozzá tartozó kiadás **és kiegyenlítés** is
+  törlődik (`eventService.deleteEvent` → `expenseRepository.deleteAllForEvent`
+  - `settlementPaymentRepository.deleteAllForEvent`).
+- **Kiegyenlítés szerkeszthető és visszavonható.** A beszámítás nem tárolt
+  adat (lásd 8.5), ezért egy utólagos összeg-, pénznem-, árfolyam- vagy
+  dátumjavítás után a jegyzék és az egyenlegek maguktól újraszámolnak.
 - `defaultCurrency` az `Event`-en **kizárólag** azt jelöli ki, milyen
   pénznemmel nyíljon meg egy új kiadás űrlapja — az elszámolás mindig
   `SETTLEMENT_CURRENCY` (HUF) alapján történik, ettől függetlenül (lásd
@@ -342,19 +372,24 @@ Részletek:
 ## 8. Elszámolási algoritmus
 
 A `packages/shared/src/settlement/computeSettlement.js` a rendszer szíve:
-egy esemény résztvevőinek egyenlegét és a szükséges, minimalizált
-utalás-listát számolja ki, kizárólag a kiadások `baseAmountMinor` (HUF)
-mezője alapján.
+egy esemény résztvevőinek egyenlegét, a **fizetési jegyzéket** (a
+minimalizált „ki fizet kinek" listát) és a kiegyenlítések beszámítását
+számolja ki, kizárólag `baseAmountMinor` (HUF) értékekből.
 
 ### 8.1 Egyenlegszámítás
 
 Minden résztvevőre:
 
 ```
-paidMinor   = az összes kiadás baseAmountMinor összege, ahol ő a payerId
-owedMinor   = az összes kiadásból rá eső rész összege (lásd lent: splitEqually)
-balanceMinor = paidMinor − owedMinor
+paidMinor    = az összes kiadás baseAmountMinor összege, ahol ő a payerId
+owedMinor    = az összes kiadásból rá eső rész összege (lásd lent: splitEqually)
+settledMinor = a kiegyenlítéseiből BESZÁMÍTOTT forint, előjelesen
+               (fizetőnek +, kedvezményezettnek −; lásd 8.5)
+balanceMinor = paidMinor − owedMinor + settledMinor
 ```
+
+A `paidMinor` és az `owedMinor` **csak a kiadásokból** számol: a kiegyenlítés
+nem kiadás, tehát a „kifizette" oszlopot nem mozdíthatja.
 
 A `balanceMinor` összege pontosan `0` minden esemény esetén (ez egy
 invariáns, amit a séma és a logika együtt garantál). Pozitív egyenleg =
@@ -387,11 +422,13 @@ adja, függetlenül attól, milyen sorrendben tárolja a DB a résztvevőket.
 
 ### 8.3 Transzferek: mohó algoritmus
 
-`computeTransfers` minden lépésben a **legnagyobb adóst** párosítja a
-**legnagyobb hitelezővel**:
+`computePlan` minden lépésben a **legnagyobb adóst** párosítja a
+**legnagyobb hitelezővel**. A bemenete a **kiadás-egyenleg**
+(`paidMinor − owedMinor`), tehát a kiegyenlítésektől független — lásd 8.5,
+ez a jegyzék állandóságának oka.
 
-1. Adósok (`balanceMinor < 0`) és hitelezők (`balanceMinor > 0`) külön
-   listába kerülnek, a saját fennmaradó összegükkel.
+1. Adósok (kiadás-egyenleg `< 0`) és hitelezők (`> 0`) külön listába
+   kerülnek, a saját fennmaradó összegükkel.
 2. Ismétlődő ciklusban: mindkét lista csökkenő összeg szerint rendeződik
    (holtverseny esetén `personId` szerint, a determinizmus kedvéért), a
    legnagyobb adós és legnagyobb hitelező között a `min(adós, hitelező)`
@@ -421,6 +458,36 @@ transfer 2: Cili → Anna 1000  (Cili balance 0, kikerül)
 Nulla egyenlegű résztvevő (aki pontosan annyit fizetett, amennyi rá esett)
 sosem szerepel egyik listában sem, tehát sosem jelenik meg transzferben.
 
+### 8.5 Kiegyenlítések beszámítása
+
+A jegyzék sorai a kiadás-egyenlegből származnak, és **nem mozdulnak el**
+attól, hogy valaki fizet. Egy fizetés csak a saját párosának sorába számít
+be, legfeljebb a sor összegéig:
+
+```
+transfers[i].creditedMinor  = a (fromId, toId) páros szelvényeinek forint-értéke,
+                              a sor amountMinor-jáig levágva
+transfers[i].remainingMinor = amountMinor − creditedMinor
+paymentCredits[j]           = { creditedMinor, roundingMinor } a j-edik szelvényre
+unmatchedCreditMinor        = az összes be nem számított forint
+```
+
+A beszámítás a szelvények **dátuma** (majd `createdAt`-je) szerint növekvő
+sorrendben történik, nem a bemeneti tömb sorrendjében: a szerver és a kliens
+ugyanezt a függvényt futtatja, más-más rendezésben tartott listával, és az
+eredmény nem függhet ettől.
+
+Miért nem a kiegyenlítésekkel korrigált egyenlegből számol a jegyzék: akkor
+egy 7 800 Ft-os sorra átadott 8 000 Ft (és minden részfizetés is) átrendezné
+a **többi** sort is — a felhasználó pedig azt látná, hogy egy másik páros
+összege változott meg attól, hogy ő fizetett. A jóváhagyott viselkedés: amit
+a jegyzék kiírt, az legyen rendezve, semmi más ne változzon.
+
+Az egyenlegbe a **beszámított** összeg kerül, nem a teljes átadott: a
+túlfizetés kerekítés, ami a szelvényen dokumentált (a felület kiírja), de az
+elszámoláshoz nem tartozik. Ez tartja igazban az alaptételt: ha a jegyzék
+minden sora rendezett, minden egyenleg pontosan `0`.
+
 ## 9. Backend rétegzés és API végpontok
 
 Szigorú rétegzés: **routes → services → repositories**. A Mongoose modell
@@ -444,51 +511,66 @@ maga is hibát dobna fejlesztéskor.
 
 ### API végpontok
 
-| Módszer  | Útvonal                      | Védett? | Leírás                                          |
-| -------- | ---------------------------- | ------- | ----------------------------------------------- |
-| `POST`   | `/api/auth/login`            | –       | Bejelentkezés jelszóval, rate-limitelt          |
-| `POST`   | `/api/auth/logout`           | –       | Session cookie törlése                          |
-| `GET`    | `/api/auth/me`               | –       | Aktuális hitelesítési állapot                   |
-| `GET`    | `/api/people`                | ✓       | Névjegyzék listázása                            |
-| `POST`   | `/api/people`                | ✓       | Új személy (egyedi név, case-insensitive)       |
-| `PATCH`  | `/api/people/:id`            | ✓       | Átnevezés                                       |
-| `DELETE` | `/api/people/:id`            | ✓       | Törlés (blokkolva, ha használatban)             |
-| `GET`    | `/api/events`                | ✓       | Események listázása, összköltséggel             |
-| `POST`   | `/api/events`                | ✓       | Új esemény (min. 2 résztvevő)                   |
-| `GET`    | `/api/events/:id`            | ✓       | Egy esemény                                     |
-| `PATCH`  | `/api/events/:id`            | ✓       | Szerkesztés (résztvevő-eltávolítás ellenőrizve) |
-| `DELETE` | `/api/events/:id`            | ✓       | Törlés a kiadásaival együtt                     |
-| `GET`    | `/api/events/:id/expenses`   | ✓       | Esemény kiadásai                                |
-| `POST`   | `/api/events/:id/expenses`   | ✓       | Új kiadás                                       |
-| `PATCH`  | `/api/expenses/:id`          | ✓       | Kiadás szerkesztése                             |
-| `DELETE` | `/api/expenses/:id`          | ✓       | Kiadás törlése                                  |
-| `GET`    | `/api/events/:id/stream`     | ✓       | Élő kiadás-frissítés (SSE), lásd 9.1            |
-| `GET`    | `/api/events/:id/settlement` | ✓       | Egyenlegek + minimalizált utalás-lista¹         |
-| `GET`    | `/api/rates?from=&to=`       | ✓       | Árfolyam lekérése (cache-elt vagy élő)          |
-| `GET`    | `/health`                    | –       | Health check (Docker healthcheck-hez)           |
+| Módszer  | Útvonal                               | Védett? | Leírás                                           |
+| -------- | ------------------------------------- | ------- | ------------------------------------------------ |
+| `POST`   | `/api/auth/login`                     | –       | Bejelentkezés jelszóval, rate-limitelt           |
+| `POST`   | `/api/auth/logout`                    | –       | Session cookie törlése                           |
+| `GET`    | `/api/auth/me`                        | –       | Aktuális hitelesítési állapot                    |
+| `GET`    | `/api/people`                         | ✓       | Névjegyzék listázása                             |
+| `POST`   | `/api/people`                         | ✓       | Új személy (egyedi név, case-insensitive)        |
+| `PATCH`  | `/api/people/:id`                     | ✓       | Átnevezés                                        |
+| `DELETE` | `/api/people/:id`                     | ✓       | Törlés (blokkolva, ha használatban)              |
+| `GET`    | `/api/events`                         | ✓       | Események listázása, összköltséggel              |
+| `POST`   | `/api/events`                         | ✓       | Új esemény (min. 2 résztvevő)                    |
+| `GET`    | `/api/events/:id`                     | ✓       | Egy esemény                                      |
+| `PATCH`  | `/api/events/:id`                     | ✓       | Szerkesztés (résztvevő-eltávolítás ellenőrizve)  |
+| `DELETE` | `/api/events/:id`                     | ✓       | Törlés a kiadásaival és kiegyenlítéseivel együtt |
+| `GET`    | `/api/events/:id/expenses`            | ✓       | Esemény kiadásai                                 |
+| `POST`   | `/api/events/:id/expenses`            | ✓       | Új kiadás                                        |
+| `PATCH`  | `/api/expenses/:id`                   | ✓       | Kiadás szerkesztése                              |
+| `DELETE` | `/api/expenses/:id`                   | ✓       | Kiadás törlése                                   |
+| `GET`    | `/api/events/:id/settlement-payments` | ✓       | Esemény kiegyenlítései                           |
+| `POST`   | `/api/events/:id/settlement-payments` | ✓       | Új kiegyenlítés                                  |
+| `PATCH`  | `/api/settlement-payments/:id`        | ✓       | Kiegyenlítés szerkesztése                        |
+| `DELETE` | `/api/settlement-payments/:id`        | ✓       | Kiegyenlítés visszavonása                        |
+| `GET`    | `/api/events/:id/stream`              | ✓       | Élő frissítés (SSE), lásd 9.1                    |
+| `GET`    | `/api/events/:id/settlement`          | ✓       | Egyenlegek + jegyzék + beszámítások¹             |
+| `GET`    | `/api/rates?from=&to=`                | ✓       | Árfolyam lekérése (cache-elt vagy élő)           |
+| `GET`    | `/health`                             | –       | Health check (Docker healthcheck-hez)            |
 
-¹ A frontend ma nem hívja: a `SettlementPanel` a betöltött kiadáslistából,
-helyben számol a `computeSettlement`-tel (`packages/shared`) — ugyanazzal a
-függvénnyel, amit ez a végpont is használ. A végpont API-teljesség
-végett maradt meg, nem hívatlanul elfelejtve.
+¹ A frontend ma nem hívja: a `SettlementPanel` a betöltött kiadás- és
+kiegyenlítés-listából, helyben számol a `computeSettlement`-tel
+(`packages/shared`) — ugyanazzal a függvénnyel, amit ez a végpont is használ.
+A végpont API-teljesség végett maradt meg, nem hívatlanul elfelejtve. A
+`paymentCredits` tömb a `GET .../settlement-payments` lista sorrendjét követi
+(dátum szerint csökkenő), tehát a két válasz párba állítható.
 
-### 9.1 Élő kiadás-frissítés (SSE)
+### 9.1 Élő frissítés (SSE)
 
 Ha többen néznek egy eseményt (közös utazáson tipikusan mindenki a saját
-telefonján), a más eszközön felvitt kiadás oldalfrissítés nélkül megjelenik.
-A csatorna **egyirányú** (szerver → kliens), ezért Server-Sent Events, nem
-WebSocket, sima HTTP-n megy.
+telefonján), a más eszközön felvitt kiadás vagy kiegyenlítés oldalfrissítés
+nélkül megjelenik. A csatorna **egyirányú** (szerver → kliens), ezért
+Server-Sent Events, nem WebSocket, sima HTTP-n megy.
+
+Egy esemény = egy csatorna: a kiegyenlítés-üzenetek is ugyanezen jönnek
+(`settlementPayment.created` / `.updated` / `.deleted`), mert ugyanannak
+az eseménynek a lapját frissítik — egy második stream csak egy második
+kapcsolatot nyitna ugyanahhoz az eseményhez. A kliens oldalán az
+`expensesStore.applyStreamMessage` irányítja a szelvény-üzeneteket a
+`settlementPaymentsStore`-hoz.
 
 ```
-POST/PATCH/DELETE ─► expenseService ──► expenseRepository (Mongo)
+POST/PATCH/DELETE ─► expenseService / settlementPaymentService ──► Mongo
                           │
-                          │ publishExpenseChange(eventId, message)
+                          │ publishEventChange(eventId, message)
                           ▼
                   eventBus (EventEmitter, csatorna: "event:<eventId>")
                           │
 GET /api/events/:id/stream ◄┘
                           │
-      EventDetailView ─► openEventStream ─► expensesStore ─► ExpenseTable
+      EventDetailView ─► openEventStream ─► expensesStore ─┬─► ExpenseTable
+                                                           └─► settlementPaymentsStore
+                                                                     └─► SettlementPanel
 ```
 
 A pub/sub (`apps/api/src/services/eventBus.js`) szándékosan **memóriában** van,
@@ -580,7 +662,8 @@ egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázi
 
 - **`cache`**: a szervertől kapott olvasások legutóbbi állapota, kulcsonként
   (`fetchWithCache` írja). Kulcsok: `events`, `people`, `expenses:<eseményId>`,
-  `event:<eseményId>` és `rate:<deviza>:<deviza>`. A kulcsok alakja **egy
+  `settlement-payments:<eseményId>`, `event:<eseményId>` és
+  `rate:<deviza>:<deviza>`. A kulcsok alakja **egy
   helyen**, az `offline/cacheKeys.js`-ben él (a `rate:` kulcsokat az
   `offline/rates.js` képzi, azokat a sáv nem követi) — a store-ok és a
   nézetek is innen kérik, mert mindkét oldal ugyanezekre a kulcsokra
@@ -695,7 +778,13 @@ rekordot inkább eldob (törli), mint hibásan visszaadna.
 **Szándékosan kizárólag a kiadás-mutációk** (létrehozás, szerkesztés,
 törlés) mennek offline sorba (`stores/expenses.js` `createExpense` /
 `updateExpense` / `deleteExpense`, `offline/outbox.js` `enqueue`) — a
-személy- és eseménykezelés online marad. Ez tudatos terjedelem-szűkítés, nem
+személy-, esemény- és **kiegyenlítés**-kezelés online marad. A kiegyenlítés
+listája cache-elt (tehát offline is látszik, amit korábban láttunk), de a
+felvétele és a visszavonása hálózatot igényel: a szinkron-motor ma
+kiadás-specifikus (árfolyam újra-feloldás, `applyUploadResult`, `clientId`
+alapú dedup), és egy második entitástípus bevezetése ott önálló munka. A
+`SettlementPayment` `clientId` mezője és sparse-unique indexe viszont már
+most létezik, hogy a későbbi sorbanállítás ne igényeljen migrációt. Ez tudatos terjedelem-szűkítés, nem
 hiányosság: ezek a műveletek keresztreferenciákat érintenek (résztvevő
 eltávolítása, személy törlése — lásd [4. fejezet](#4-adatmodell)), amiknek az
 érvényessége a szerveren, a teljes adatállapot ismeretében dől el, és offline
@@ -989,7 +1078,11 @@ Egységes hibaformátum minden route-on: `{ error: { code, message, details? } }
 ```
 main.js              App bootstrap: Pinia + Router + téma inicializálás
 router/index.js       Route definíciók + globális auth guard
-stores/*.js            Pinia store-ok: auth, people, events, expenses
+                      (az esemény két füle külön útvonal:
+                       /events/:id/kiadasok és /events/:id/elszamolas,
+                       a tab nélküli /events/:id a kiadásokat mutatja)
+stores/*.js            Pinia store-ok: auth, people, events, expenses,
+                       settlementPayments, offline
 api/client.js           Vékony fetch wrapper, egységes hibakezeléssel
 views/*.vue             Route-szintű oldalak (Login, EventsList, EventDetail, Settings)
 components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszámolás panel
@@ -1000,6 +1093,21 @@ components/*.vue        Újrafelhasználható UI: modálok, táblázatok, elszá
   (`schema` opció az `apiClient` hívásokban) — ugyanaz a séma fut kliensen
   és szerveren, tehát egy backend-kontraktus-törés azonnal, fejlesztés
   közben kiderül.
+- **`SettlementPanel.vue`**: az Elszámolás fül. Három blokk: egyenlegtábla
+  (rézszínnel kiemelt „Kiegyenlítve” oszloppal), a **fizetési jegyzék** (a
+  rendezett sorok pecséttel, ott maradva; a részben fizetett sorokon hátralék
+  - folyamatsáv; a nyitott sorokon „Rendezve” gomb), és a **kiegyenlítések
+    naplója** perforált bal élű szelvényekkel, soronként szerkesztéssel és
+    visszavonással. Nem hív külön végpontot: a
+    `computeSettlement`-tel helyben számol a két betöltött listából, tehát a
+    stream minden változását azonnal követi.
+- **`SettlementPaymentModal.vue`**: egy konkrét jegyzéksor rendezése, illetve
+  egy meglévő szelvény szerkesztése (a `payment` prop dönt). Szabad
+  fizető/kedvezményezett választás szándékosan nincs — a kiegyenlítés mindig
+  egy létező tartozást zár. Devizánál az árfolyam-mező a kiadás-űrlappal
+  azonos módon működik (letöltött érték, „Frissítés” gomb, beleírás → kézi
+  árfolyam), és élő segédszöveg mondja meg, mennyi számít be és mennyi a
+  kerekítés.
 - **`ExpenseModal.vue`**: a legösszetettebb komponens. Élőben számol
   HUF-előnézetet (`convertExpenseAmounts` a shared csomagból, ugyanazzal a
   logikával, mint a backend), figyeli a "dirty" állapotot (nem mentett
