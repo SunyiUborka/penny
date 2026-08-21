@@ -183,8 +183,12 @@ Minden kiadás előtt kézzel emeld a `versionCode` értékét az
 `apps/mobile/android/app/build.gradle`-ben — a Play Store-on kívüli, kézi
 telepítésnél is ez dönti el, hogy egy új APK „frissítésnek" számít-e a régi
 fölött. A `versionName` a `versionCode`-ot követi `0.x` alakban, mert a
-projekt még nem érte el az első release-t; a `versionCode` viszont sosem
-csökkenthető, azt az Android tiltja.
+projekt még nem érte el az első release-t.
+
+A `versionCode` **csökkentése** külön eset: az Android nem engedi egy
+alacsonyabb kódú APK-t a már telepített, magasabb kódú fölé — ilyenkor a
+telefonon előbb el kell távolítani az appot (a helyi adatokkal, azaz az
+offline cache-szel és a munkamenettel együtt).
 
 ### Aláíró kulcs
 
