@@ -35,6 +35,49 @@ export async function writeCache(key, value) {
 }
 
 /**
+ * Csendes háttérfrissítés: **kizárólag hálózat**, cache-tartalék NÉLKÜL — de a
+ * sikeres választ ugyanúgy a cache-be írja és a kulcsot frissnek jelöli, mint a
+ * `fetchWithCache`.
+ *
+ * Miért nem elég erre az `apiClient` közvetlen hívása: a `setFresh` egyedül a
+ * `fetchWithCache`-ből futott, viszont a helyreállási utak (stream
+ * újrakapcsolódás, előtérbe kerülés, lehúzásos frissítés) MIND csendes
+ * frissítést hívnak. Egy egyszer elavultra jelölt kulcs így a munkamenet
+ * végéig elavult maradt: a felhasználó látta frissülni a listát, miközben az
+ * `OfflineBanner` továbbra is azt állította, hogy régi adatot néz — két,
+ * egymásnak ellentmondó jelzés ugyanazon a képernyőn, és a hangosabbik hamis
+ * (lásd a végső review I4 pontját). A cache írása ugyanezt a rést zárja a
+ * lemezen lévő másolaton: enélkül a csendes frissítéssel behozott sorok soha
+ * nem kerültek offline másolatba.
+ *
+ * Bukáskor szándékosan **dob**, és semmit nem változtat: a hívó nyeli el a
+ * hibát, és a képernyőn hagyja a láthatót. Cache-re esni itt tilos lenne —
+ * ott már látszik adat, egy cache-re-esés csak lecserélhetné egy régebbi
+ * másolatra (a `fetchWithCache`-csel szembeni szándékos különbség).
+ *
+ * @param {{ key: string, request: () => Promise<unknown> }} options
+ * @returns {Promise<unknown>} a hálózatról kapott érték
+ */
+export async function refreshIntoCache(options) {
+  const { key, request } = options;
+  const value = await request();
+  const fetchedAt = new Date();
+  try {
+    await writeCache(key, value);
+  } catch (writeError) {
+    // Ugyanaz a szabály, mint a `fetchWithCache`-ben: egy írási hiba (betelt
+    // vagy megtagadott tárhely) nem ronthatja el egy már sikeres hálózati
+    // választ — ekkor a cache csak degradált, nem a lekérés bukott el.
+    console.error('Nem sikerült a csendes frissítés válaszát a cache-be írni:', writeError);
+  }
+  // A frissesség a KULCSRA vonatkozik, nem arra, hogy a hívó felhasználja-e a
+  // választ: ha közben másik eseményre navigáltunk, ez az adat akkor is friss
+  // (és a cache-ben is friss), csak nem ezen a képernyőn látszik.
+  useOfflineStore().setFresh(key, fetchedAt);
+  return value;
+}
+
+/**
  * Hálózat-először olvasás cache-tartalékkal.
  *
  * Csak a hálózat tényleges elérhetetlensége esik vissza a cache-re. Két

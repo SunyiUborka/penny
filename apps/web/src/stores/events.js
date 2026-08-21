@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { eventListResponseSchema, eventResponseSchema } from '@filler/shared';
 import { apiClient } from '../api/client.js';
-import { fetchWithCache } from '../offline/cache.js';
+import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
 
 export const useEventsStore = defineStore('events', {
   state: () => ({
@@ -35,7 +35,15 @@ export const useEventsStore = defineStore('events', {
      */
     async refreshQuietly() {
       try {
-        this.events = await apiClient.get('/events', { schema: eventListResponseSchema });
+        // `refreshIntoCache`, nem közvetlen `apiClient`: a sikeres csendes
+        // frissítés a cache-t is felírja, és az `events` kulcsot frissnek
+        // jelöli — enélkül a lehúzásos frissítés után a lista látványosan
+        // frissült, az offline sáv pedig továbbra is azt állította, hogy
+        // elavult adatot néz (lásd a végső review I4 pontját).
+        this.events = await refreshIntoCache({
+          key: 'events',
+          request: () => apiClient.get('/events', { schema: eventListResponseSchema }),
+        });
         // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
         // sikeres csendes frissítés a bizonyíték, hogy a kapcsolat helyreállt.
         this.error = null;
@@ -74,11 +82,20 @@ export const useEventsStore = defineStore('events', {
      * offline előtérbe kerülésnél visszaugrana a szerkesztés előtti névre).
      * A hívó a hibát elnyeli, és a láthatót hagyja — ugyanaz a felosztás,
      * mint a `fetchEvents` és a `refreshQuietly` között.
+     *
+     * A sikeres választ viszont a cache-be írja és az `event:<id>` kulcsot
+     * frissnek jelöli (`refreshIntoCache`): a „nincs cache-tartalék" nem
+     * jelenti azt, hogy a cache-t ne is frissítenénk — az offline sáv
+     * enélkül a munkamenet végéig elavultat állított volna egy épp
+     * frissített eseményről (lásd a végső review I4 pontját).
      * @param {string} id
      * @returns {Promise<object>}
      */
     refreshEvent(id) {
-      return apiClient.get('/events/' + id, { schema: eventResponseSchema });
+      return refreshIntoCache({
+        key: `event:${id}`,
+        request: () => apiClient.get('/events/' + id, { schema: eventResponseSchema }),
+      });
     },
 
     /**
