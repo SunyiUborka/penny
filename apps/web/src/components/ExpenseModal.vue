@@ -184,6 +184,12 @@ const itemsTotalLabel = computed(() =>
   formatMoney({ amountMinor: itemsTotalMinor.value, currency: currency.value }),
 );
 
+/**
+ * Nyitva van-e a tétellista. Bekapcsoláskor (és szerkesztésre nyitott tételes
+ * számlánál) nyitva indul — a csukás kézi művelet.
+ */
+const itemsExpanded = ref(true);
+
 function toggleItemized() {
   if (itemized.value) {
     if (
@@ -202,6 +208,7 @@ function toggleItemized() {
   // minden résztvevőjével — a „közös" tétel. Így semmi nem veszik el.
   items.value = [createItem({ amountMajor: amountMajor.value })];
   itemized.value = true;
+  itemsExpanded.value = true;
 }
 
 function addItem() {
@@ -393,6 +400,10 @@ function validate() {
     });
     if (itemErrors.some(Boolean)) {
       errors.itemRows = itemErrors;
+      // Egy csukott tétellistában a hibaüzenet láthatatlan lenne: a
+      // felhasználó annyit látna, hogy a mentés nem történt meg, azt nem,
+      // hogy miért. Ezért a hibás tételsor kinyitja a listát.
+      itemsExpanded.value = true;
     }
     if (itemsTotalMinor.value > maxAmountMinor) {
       errors.amount = `A végösszeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
@@ -561,21 +572,53 @@ onUnmounted(() => {
         </p>
 
         <div class="expense-modal__itemized">
-          <label class="expense-modal__itemized-label">
-            <input
-              type="checkbox"
-              :checked="itemized"
-              :disabled="saving"
-              @change="toggleItemized"
-            />
-            Tételes felosztás
-          </label>
+          <div class="expense-modal__itemized-row">
+            <label class="expense-modal__itemized-label">
+              <!--
+                `@click.prevent`, nem `@change`: a `toggleItemized` a
+                kikapcsolást megerősítéshez kötheti, és megszakításnál nem
+                változtat állapotot. A böngésző viszont a natív kattintáskor
+                MAGA átállítja a DOM-elemet, és Vue nem írja vissza, mert a
+                `:checked` kötött értéke ugyanaz maradt — a jelölőnégyzet így
+                az elvetett váltás után is átváltva látszott. Prevent-tel a
+                DOM-ot kizárólag a `:checked` mozgatja, tehát mindig az
+                állapotot mutatja. Billentyűzetről is működik: a szóköz is
+                kattintás-eseményt küld.
+              -->
+              <input
+                type="checkbox"
+                class="expense-modal__checkbox"
+                :checked="itemized"
+                :disabled="saving"
+                @click.prevent="toggleItemized"
+              />
+              Tételes felosztás
+            </label>
+            <button
+              v-if="itemized"
+              type="button"
+              class="expense-modal__items-toggle"
+              :aria-expanded="itemsExpanded"
+              @click="itemsExpanded = !itemsExpanded"
+            >
+              {{ items.length }} tétel
+              <span class="expense-modal__items-caret" aria-hidden="true">▾</span>
+            </button>
+          </div>
           <p class="expense-modal__itemized-hint">
             Egy számla, több tétel — tételenként más osztozókkal.
           </p>
         </div>
 
-        <fieldset v-if="itemized" class="modal__fieldset">
+        <!--
+          `v-if`, nem `v-show`: a csukott tétellistának el kell tűnnie a
+          DOM-ból, mert a modál fókuszcsapdája (`focusableElements`) a
+          láthatóságot nem vizsgálja, csak a `disabled`-et — egy elrejtett
+          `v-show`-os blokk mezőibe így be lehetne tabolni. Ezért a lenyitó
+          gombon nincs `aria-controls` sem: csukott állapotban nem lenne mire
+          hivatkoznia.
+        -->
+        <fieldset v-if="itemized && itemsExpanded" class="modal__fieldset">
           <legend>Tételek</legend>
           <div v-for="(item, index) in items" :key="item.key" class="expense-item">
             <div class="expense-item__row">
@@ -907,6 +950,13 @@ onUnmounted(() => {
   margin: var(--space-3) 0 var(--space-4);
 }
 
+.expense-modal__itemized-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .expense-modal__itemized-label {
   display: flex;
   align-items: center;
@@ -914,6 +964,95 @@ onUnmounted(() => {
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* Az app egyetlen jelölőnégyzete, ezért itt lakik és nem a theme.css-ben.
+   A natív megjelenést a nyugta-nyelv váltja: szögletes doboz, bejelölve
+   bankjegy-zöld kitöltéssel — a `participant-chip` kiválasztott állapotának
+   ugyanazokkal a színeivel. */
+.expense-modal__checkbox {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* A pipa az elem elé rajzolt jel, nem betűkarakter: így a méretét a doboz
+   szabja meg, nem a szövegtörzs betűtípusa. */
+.expense-modal__checkbox::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.3rem;
+  border-left: 2px solid var(--paper-raised);
+  border-bottom: 2px solid var(--paper-raised);
+  transform: rotate(-45deg) translate(0.03rem, -0.06rem);
+  opacity: 0;
+}
+
+.expense-modal__checkbox:checked {
+  background: var(--forint);
+  border-color: var(--forint);
+}
+
+.expense-modal__checkbox:checked::before {
+  opacity: 1;
+}
+
+.expense-modal__checkbox:focus-visible {
+  outline: 2px solid var(--forint);
+  outline-offset: 2px;
+}
+
+.expense-modal__checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Lenyitó a tétellistához, a kiadáslista `3 tétel` jelölésének párja. */
+.expense-modal__items-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.expense-modal__items-toggle[aria-expanded='true'] {
+  border-style: solid;
+  color: var(--forint);
+}
+
+.expense-modal__items-caret {
+  transition: transform 0.15s ease;
+}
+
+.expense-modal__items-toggle[aria-expanded='true'] .expense-modal__items-caret {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expense-modal__checkbox,
+  .expense-modal__items-caret {
+    transition: none;
+  }
 }
 
 .expense-modal__itemized-hint,
