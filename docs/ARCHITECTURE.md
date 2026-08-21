@@ -608,6 +608,21 @@ azt állította, hogy régi adatot néz. **A „nincs cache-tartalék” tehát 
 azt jelenti, hogy a cache-t ne is frissítenénk** — a kettő két külön
 kérdés (mit MUTATUNK bukáskor, illetve mit ÍRUNK sikerkor).
 
+**Ismert, tudatosan vállalt maradék: az élő stream nem írja a cache-t.** Az
+SSE-n érkező kiadásokat (`applyStreamMessage`) a store azonnal megjeleníti,
+de az offline másolatba nem írja bele — az csak `fetchWithCache`-re és
+`refreshIntoCache`-re frissül. Egy egész napra nyitva hagyott munkamenetben
+tehát a lemezen lévő másolat elmaradhat attól, ami a képernyőn látszott: aki
+reggel megnyitotta az eseményt, napközben végignézte, ahogy öt kiadás
+befut a stream-en, és este offline nyitja újra az appot, a reggeli
+állapotot kapja vissza — az öt kiadás nélkül, az elszámolásból is
+kimaradva. **Ezt szándékosan nem javítjuk minden üzenetnél cache-írással**:
+az sokkal több írási forgalom, mint amennyit ér, a sáv időbélyege pedig
+kimondja, milyen kori a mutatott másolat. Az elmaradást a csendes
+frissítések korlátozzák: minden stream-újrakapcsolódás, előtérbe kerülés és
+lehúzásos frissítés felírja a cache-t, tehát a lemezen lévő másolat
+legfeljebb a legutóbbi csendes frissítésig marad el.
+
 A cache egy app-frissítés után is biztonságos: `readCache` a beolvasott
 értéket újra a hívó Zod sémájával validálja, és egy már nem illeszkedő
 rekordot inkább eldob (törli), mint hibásan visszaadna.
