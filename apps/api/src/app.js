@@ -72,6 +72,7 @@ export async function buildApp(env) {
   await app.register(mongoPlugin, { mongoUrl: env.MONGO_URL });
 
   await app.register(healthRoutes);
+  await app.register(healthRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api/auth' });
 
   await app.register(

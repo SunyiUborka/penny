@@ -158,14 +158,23 @@ A `build:mobile` a `MOBILE_API_BASE_URL` környezeti változóból veszi a
 backend URL-jét (alapértelmezés: `https://bill.p1ckle.xyz/api`), és ezt
 `VITE_API_BASE_URL`-ként fordítja bele a webes kódba.
 
-**A szerver címe fordítási időben rögzül, és HTTPS végpontnak kell lennie.**
-Az appon belül nincs szerver-cím mező — ez szándékos. A `targetSdkVersion 36`
-letiltja a cleartext (plain HTTP) forgalmat, és a projekt szándékosan nem ad
-hozzá `usesCleartextTraffic` kivételt vagy hálózatbiztonsági konfigurációt —
-egy LAN IP-re vagy más plain HTTP címre mutató build minden kérésnél
-elhasalna, jól látható hibaüzenet nélkül. Ha domaint váltasz, új APK-t kell
-fordítanod a megfelelő, HTTPS-sel elérhető `MOBILE_API_BASE_URL` értékkel
-(pl. a Caddy elé rakott domain); a régi APK-ban a cím utólag nem írható át.
+Ez az **alapértelmezett** cím. Az appon belül, a bejelentkezési képernyőn
+átállítható egyéni címre (`Szerver` blokk): választható az alapértelmezett
+vagy egy saját cím, és a „Kapcsolat ellenőrzése" gomb megnézi, hogy a cím
+alatt valóban Fillér-szerver válaszol-e (`GET <cím>/health`, 5 s időkorlát).
+A választás a készüléken tárolódik (Capacitor Preferences), és az app
+indulásakor, az első kérés előtt töltődik be.
+
+**Csak HTTPS cím adható meg.** A `targetSdkVersion 36` letiltja a cleartext
+(plain HTTP) forgalmat, és a projekt szándékosan nem ad hozzá
+`usesCleartextTraffic` kivételt vagy hálózatbiztonsági konfigurációt — egy
+LAN IP-re vagy más plain HTTP címre mutató beállítás minden kérésnél
+elhasalna. Ezért a mező a `http://` címet elutasítja, és ezt meg is mondja.
+
+Szerverváltáskor az app törli a munkamenetet (tokent) és a teljes helyi
+másolatot (cache + fel nem töltött outbox-tételek), mert a másik szerver
+adatai mások — a törlés előtt megerősítést kér, és kiírja, ha ezzel fel nem
+töltött tételek is elvesznek.
 
 Sikeres `release:mobile` után az aláírt APK itt jön létre:
 `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
