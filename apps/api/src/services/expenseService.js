@@ -122,14 +122,14 @@ async function getEventOrThrow(eventId) {
 }
 
 /**
- * @param {{ participantIds: string[] }} event
- * @param {{ payerId: string, sharedWithIds: string[] }} input
- *
  * A tételekre nincs külön ellenőrzés, és ez nem kihagyás: a kérés sémája
  * megköveteli, hogy minden tétel osztozója a kiadás `sharedWithIds`-ében
  * legyen, ez a függvény pedig a `sharedWithIds`-et az esemény résztvevőihez
  * méri. Az `items ⊆ sharedWithIds ⊆ event.participantIds` láncból következik,
  * hogy egy tétel-osztozó sem lehet kívülálló.
+ *
+ * @param {{ participantIds: string[] }} event
+ * @param {{ payerId: string, sharedWithIds: string[] }} input
  */
 function assertParticipants(event, input) {
   const participantSet = new Set(event.participantIds);
