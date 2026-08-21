@@ -1,10 +1,12 @@
 import { Network } from '@capacitor/network';
+import { watch } from 'vue';
 import { ZodError } from 'zod';
 import { expenseResponseSchema } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
 import { listEntries, markFailed, refreshCounts, removeEntry } from './outbox.js';
 import { RateResolutionError, withFreshRate } from './rates.js';
 import { useExpensesStore } from '../stores/expenses.js';
+import { useOfflineStore } from '../stores/offline.js';
 
 /** Egyszerre csak egy futás legyen, különben ugyanaz az elem kétszer menne fel. */
 let running = false;
@@ -289,6 +291,92 @@ async function uploadEntry(entry) {
  * Automatikus szinkron: hálózat visszatérésekor és előtérbe kerüléskor.
  * @returns {Promise<void>}
  */
+/**
+ * Újrapróbálkozási várakozások. Növekvő, felső korláttal: a cél nem a gyors
+ * kopogtatás, hanem hogy a sor SOHA ne maradjon feltöltetlenül csak azért,
+ * mert egyetlen kiváltó esemény rossz pillanatban érkezett.
+ */
+const RETRY_DELAYS_MS = [5_000, 15_000, 45_000, 120_000, 300_000];
+
+/** @type {ReturnType<typeof setTimeout> | null} */
+let retryTimer = null;
+let retryAttempt = 0;
+
+/**
+ * Feltöltési kör indítása MINDEN kiváltóból ezen keresztül, majd a maradék
+ * alapján újrapróbálkozás ütemezése.
+ *
+ * Miért kell ez. A motor korábban kizárólag diszkrét kiváltókra támaszkodott
+ * (hálózat visszatérése, előtérbe kerülés, indulás, kézi gomb), és mindegyik
+ * PONTOSAN EGY próbálkozást jelentett. Ha az az egy elbukott, semmi nem
+ * próbálta újra, amíg az app nyitva volt. A hálózat visszatérése pedig épp a
+ * legrosszabb pillanat egyetlen próbálkozásra: az Android akkor jelenti a
+ * kapcsolatot, amikor az interfész feláll, a DNS és az útválasztás viszont
+ * ekkor még nem biztosan használható. A felhasználó ebből azt látta, hogy
+ * „visszajött a net, de a függőben lévő kiadás nem megy fel" — és csak az app
+ * teljes újraindítása segített, mert az új próbálkozást jelentett.
+ *
+ * Ez a védelem szándékosan nem attól függ, hogy MELYIK ok állt fenn: akkor is
+ * helyes, ha a hálózati esemény meg sem érkezett, és akkor is, ha megérkezett,
+ * csak túl korán.
+ * @param {{ fromEvent?: boolean }} [options] `fromEvent`: friss külső kiváltó,
+ *   ilyenkor a várakozás-sorozat nullázódik (azonnal érdemes próbálni)
+ * @returns {Promise<void>}
+ */
+async function runSync(options = {}) {
+  if (options.fromEvent) {
+    retryAttempt = 0;
+  }
+  cancelRetry();
+
+  /** @type {{ skipped: boolean } | undefined} */
+  let result;
+  try {
+    result = await syncOutbox();
+  } catch (error) {
+    // A szinkron hibája nem törheti meg az appot; az elemek a sorban maradnak.
+    console.error('A feltöltési kör hibára futott:', error);
+  }
+
+  if (result?.skipped) {
+    // Épp fut egy másik kör. Nem elég visszatérni: a fenti `cancelRetry`
+    // már visszavonta a beütemezett órát, és a párhuzamos futás nem
+    // feltétlenül ütemez újat (a Szinkronizálás képernyő „Feltöltés most"
+    // gombja közvetlenül a `syncOutbox`-ot hívja, hogy az eredményt meg
+    // tudja mutatni). Ütemezünk tehát: ha a másik kör közben kiürítette a
+    // sort, ez a kör csak annyit tesz, hogy nem talál semmit és nullázza a
+    // várakozás-sorozatot.
+    scheduleRetry();
+    return;
+  }
+
+  // Maradt-e feltöltésre váró elem. A `syncOutbox` a `finally`-ben már
+  // frissítette a számlálókat, tehát ez az érték friss.
+  if (useOfflineStore().pendingCount > 0) {
+    scheduleRetry();
+  } else {
+    retryAttempt = 0;
+  }
+}
+
+/** Következő újrapróbálkozás ütemezése növekvő várakozással. */
+function scheduleRetry() {
+  const delay = RETRY_DELAYS_MS[Math.min(retryAttempt, RETRY_DELAYS_MS.length - 1)];
+  retryAttempt += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    runSync();
+  }, delay);
+}
+
+/** A beütemezett újrapróbálkozás visszavonása (új kör indul helyette). */
+function cancelRetry() {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
 export async function startAutoSync() {
   // Előtérbe kerüléskor is szinkronizálunk. Szándékosan `visibilitychange`,
   // nem a `@capacitor/app` `appStateChange`-e: az élő-frissítés kör óta a
@@ -310,17 +398,23 @@ export async function startAutoSync() {
   // C1 pontját).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      syncOutbox().catch(() => {});
+      runSync({ fromEvent: true });
     }
+  });
+
+  // A böngésző saját `online` eseménye MÁSODIK, platformfüggetlen kiváltó a
+  // Capacitor hálózatfigyelője mellett. Szándékosan redundáns: a natív plugin
+  // eseménye elmaradhat (nem regisztrált plugin, elhasalt feliratkozás), és
+  // ez a WebView-ban is megszólal. A `running` zár és az újrapróbálkozás
+  // visszavonása miatt a két kiváltó együtt sem indít párhuzamos kört.
+  window.addEventListener('online', () => {
+    runSync({ fromEvent: true });
   });
 
   try {
     await Network.addListener('networkStatusChange', (status) => {
       if (status.connected) {
-        syncOutbox().catch(() => {
-          // A szinkron hibája nem törheti meg az appot; az elemek a sorban
-          // maradnak, a következő alkalommal újrapróbáljuk.
-        });
+        runSync({ fromEvent: true });
       }
     });
   } catch (error) {
@@ -332,5 +426,20 @@ export async function startAutoSync() {
     console.error('A hálózatfigyelő feliratkozás nem sikerült:', error);
   }
 
-  await syncOutbox();
+  // A várakozó tételek SZÁMA maga tartja életben az órát. Enélkül maradt egy
+  // rés: ha az app nyitva van és offline kerül sorba egy kiadás, semmi nem
+  // ütemezett újrapróbálkozást — a következő kiváltóig (kapcsolat, előtér,
+  // újraindítás) a sor csak várt. Így viszont amíg van feltöltésre váró elem,
+  // mindig van beütemezett kör is.
+  const offlineStore = useOfflineStore();
+  watch(
+    () => offlineStore.pendingCount,
+    (pending) => {
+      if (pending > 0 && retryTimer === null && !running) {
+        scheduleRetry();
+      }
+    },
+  );
+
+  await runSync({ fromEvent: true });
 }
