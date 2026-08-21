@@ -2,15 +2,29 @@ import { Types } from 'mongoose';
 import { ExpenseModel } from '../models/expenseModel.js';
 
 /**
+ * A tétel osztozói a Mongo-ból `ObjectId` példányként jönnek, a válaszséma
+ * `personIdSchema`-ja viszont stringet vár — enélkül a séma-validáció a
+ * kimenetnél hasal el.
+ * @param {object} item
+ */
+function serializeItem(item) {
+  return { ...item, sharedWithIds: item.sharedWithIds.map(String) };
+}
+
+/**
  * @param {import('mongoose').Document} doc
  */
 function serialize(doc) {
-  const { _id, __v, eventId, payerId, sharedWithIds, ...rest } = doc.toObject();
+  const { _id, __v, eventId, payerId, sharedWithIds, items, ...rest } = doc.toObject();
   return {
     id: _id.toString(),
     eventId: eventId.toString(),
     payerId: payerId.toString(),
     sharedWithIds: sharedWithIds.map(String),
+    // Üres/hiányzó tétellistánál a mezőt KI SEM írjuk: a válaszséma az
+    // `items`-et opcionálisnak, de nem üresnek fogadja el — a tételezés
+    // hiányát a mező elhagyása jelenti.
+    ...(items?.length ? { items: items.map(serializeItem) } : {}),
     ...rest,
   };
 }
@@ -55,7 +69,17 @@ export async function createExpense(input) {
  * @returns {Promise<object | null>}
  */
 export async function updateExpense(id, input) {
-  const doc = await ExpenseModel.findByIdAndUpdate(id, input, { new: true, runValidators: true });
+  const { items, ...withoutItems } = input;
+  // A `findByIdAndUpdate` az undefined mezőket kihagyja a `$set`-ből (erre
+  // támaszkodik a `clientId` megőrzése is, lásd `expenseService`), tehát egy
+  // tételes → egyszerű szerkesztésnél a régi `items` bent maradna: a lista a
+  // helyes végösszeget mutatná, az elszámolás viszont a megmaradt tételekből
+  // számolna. Ezért a tételek hiánya kifejezett `$unset`.
+  const update = items ? { $set: input } : { $set: withoutItems, $unset: { items: 1 } };
+  const doc = await ExpenseModel.findByIdAndUpdate(id, update, {
+    new: true,
+    runValidators: true,
+  });
   return doc ? serialize(doc) : null;
 }
 

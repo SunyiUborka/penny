@@ -20,6 +20,10 @@ export async function getSettlement(eventId) {
       payerId: expense.payerId,
       baseAmountMinor: expense.baseAmountMinor,
       sharedWithIds: expense.sharedWithIds,
+      // Csak akkor adjuk át, ha van: az `items: undefined` a sémán átmegy, de
+      // az explicit feltétel dokumentálja, hogy a tétel nélküli kiadás
+      // szándékosan a régi úton (egyenlő felosztással) számol.
+      ...(expense.items ? { items: expense.items } : {}),
     })),
   });
 }
