@@ -118,9 +118,43 @@ export function isEstimatedRate(payload) {
 }
 
 /**
+ * Azok a HTTP-státuszkódok, amik magáról az ÁRFOLYAMRÓL szóló, végleges
+ * verdiktet jelentenek: `400` (a kérés érvénytelen, pl. nem támogatott
+ * devizapár) és `404`. Ugyanezzel a kéréssel újra próbálkozva ez mindig
+ * ugyanígy elbukna — az `offline/sync.js` `PAYLOAD_VERDICT_STATUS_CODES`
+ * halmazának megfelelője, csak a `409` nélkül (annak a `/rates`-en nincs
+ * értelme: nincs `clientId`, amivel ütközhetne).
+ *
+ * **Minden más `ApiError` átmeneti.** Ez nem elméleti: a `/rates` elsőrangú
+ * átmeneti hibája az `502 RATE_UNAVAILABLE`, amit a szerver akkor ad, ha a
+ * külső árfolyam-szolgáltató hívása hibázott ÉS a szerver saját cache-e sem
+ * segít — az pedig romlandó, a `rateCacheModel` 24 órás TTL-indexe miatt.
+ * Ha a `502`-t végleges verdiktnek vennénk, egy kimerült API-kvóta mellett
+ * minden sorbanálló devizás kiadás a napokkal korábbi becsléssel menne fel
+ * `rateSource: 'api'`-ként, és a sor a feltöltés után már nem `pending`,
+ * tehát a `≈` és az elszámolás figyelmeztetése is eltűnne: a felhasználó egy
+ * elavult becslésből számolt egyenleget látna véglegesként (végső review I6).
+ * Ugyanezt a `502`-t az OLVASÁSI út (`fetchRateWithCache`) hangosan
+ * továbbdobja, és kézi árfolyam-megadást kér — az ÍRÁSI út, ami a számot
+ * örökre eltárolja, nem lehet ennél engedékenyebb.
+ * @type {ReadonlySet<number>}
+ */
+const RATE_VERDICT_STATUS_CODES = new Set([400, 404]);
+
+/**
+ * Igaz, ha a hiba magáról az árfolyamról szóló végleges verdikt (lásd fent).
+ * @param {ApiError} error
+ * @returns {boolean}
+ */
+function isRateVerdict(error) {
+  return RATE_VERDICT_STATUS_CODES.has(error.statusCode);
+}
+
+/**
  * Az árfolyam frissítése közben történt, a kiadás írásáról semmit nem
- * mondó hiba (hálózathiba a `/rates` felé, vagy a válasza nem illik a
- * sémára). Szándékosan külön típus, nem puszta továbbdobás: a `syncOutbox`
+ * mondó, **átmeneti** hiba (hálózathiba a `/rates` felé, a válasza nem illik
+ * a sémára, vagy a szerver egy nem az árfolyamról szóló hibát adott — pl.
+ * `502 RATE_UNAVAILABLE`). Szándékosan külön típus, nem puszta továbbdobás: a `syncOutbox`
  * osztályozója enélkül a kiváltó kivétel TÍPUSA alapján döntene — egy innen
  * származó `ZodError`-t tévesen a KIADÁS-válasz kontraktus-töréseként
  * kezelne, és véglegesen `failed`-be tenne egy olyan kiadást, amit még fel
@@ -169,15 +203,17 @@ export async function withFreshRate(payload) {
     const fresh = await fetchFreshRate(payload.currency, SETTLEMENT_CURRENCY);
     return { ...payload, exchangeRate: fresh.rate, rateFetchedAt: fresh.fetchedAt };
   } catch (error) {
-    if (error instanceof ApiError) {
-      // A szerver ténylegesen nemet mondott az árfolyamra (pl. nem
+    if (error instanceof ApiError && isRateVerdict(error)) {
+      // A szerver ténylegesen nemet mondott MAGÁRA AZ ÁRFOLYAMRA (pl. nem
       // támogatott devizapár) — ez végleges verdikt, a becsléssel megyünk
       // tovább: ez még mindig jobb, mint a kiadást a sorban ragasztani.
       return payload;
     }
-    // Hálózathiba vagy sémaeltérés: nem tudjuk, mi a friss árfolyam, de ez
-    // nem végleges — nem szabad csendben ráfogni a becslésre, hogy az a
-    // végleges érték. A tételnek `pending`-en kell maradnia, hogy a
+    // Átmeneti hiba: hálózathiba, sémaeltérés, vagy a szerver egy nem az
+    // árfolyamról szóló válasza (`401`/`403` lejárt munkamenet, `408`/`429`,
+    // és minden `5xx` — köztük a `/rates` `502 RATE_UNAVAILABLE`-je). Nem
+    // tudjuk, mi a friss árfolyam, de ez nem végleges — nem szabad csendben
+    // ráfogni a becslésre, hogy az a végleges érték. A tételnek `pending`-en kell maradnia, hogy a
     // következő (remélhetőleg sikeres) próbálkozáskor valódi árfolyammal
     // menjen fel. A `RateResolutionError`-ba csomagolva dobjuk tovább, nem
     // nyersen: a `syncOutbox` osztályozója különben a kiváltó kivétel
