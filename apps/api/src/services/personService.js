@@ -1,6 +1,7 @@
 import * as personRepository from '../repositories/personRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
 import * as expenseRepository from '../repositories/expenseRepository.js';
+import * as settlementPaymentRepository from '../repositories/settlementPaymentRepository.js';
 import { ConflictError, NotFoundError } from '../errors.js';
 
 export function listPeople() {
@@ -51,6 +52,14 @@ export async function deletePerson(id) {
     throw new ConflictError(
       'A személy nem törölhető, mert fizetőként vagy osztozóként szerepel az alábbi kiadásokban.',
       { expenses: usedInExpenses },
+    );
+  }
+
+  const usedInPayments = await settlementPaymentRepository.findByPersonInvolved(id);
+  if (usedInPayments.length > 0) {
+    throw new ConflictError(
+      'A személy nem törölhető, mert fizetőként vagy kedvezményezettként szerepel kiegyenlítésekben.',
+      { payments: usedInPayments },
     );
   }
 

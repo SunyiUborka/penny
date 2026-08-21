@@ -10,3 +10,5 @@ export * from './schemas/person.js';
 export * from './schemas/event.js';
 export * from './schemas/rate.js';
 export * from './schemas/expense.js';
+export * from './schemas/settlementPayment.js';
+export * from './schemas/eventStream.js';

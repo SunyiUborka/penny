@@ -23,3 +23,11 @@ export function toDateInputValue(value) {
   }
   return new Date(value).toISOString().slice(0, 10);
 }
+
+/**
+ * @param {string} rate
+ * @returns {string}
+ */
+export function roundRate(rate) {
+  return String(Math.round(Number(rate) * 100) / 100);
+}

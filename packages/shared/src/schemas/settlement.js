@@ -13,13 +13,47 @@ const settlementExpenseSchema = z.object({
   items: z.array(settlementExpenseItemSchema).min(1).optional(),
 });
 
+/**
+ * Egy kiegyenlítés a számítás szempontjából: ki adott kinek, mennyi
+ * forintot. A `date`/`createdAt` a beszámítás sorrendjét adja (a régebbi
+ * szelvény számít be előbb), hogy a szerver és a kliens ugyanarra az
+ * eredményre jusson akkor is, ha a listát máshogy rendezve tartja.
+ */
+const settlementPaymentSchema = z.object({
+  fromId: personIdSchema,
+  toId: personIdSchema,
+  baseAmountMinor: amountMinorSchema.nonnegative(),
+  date: z.coerce.date().optional(),
+  createdAt: z.coerce.date().optional(),
+});
+
 export const computeSettlementInputSchema = z
   .object({
     participantIds: z.array(personIdSchema).min(1),
     expenses: z.array(settlementExpenseSchema),
+    payments: z.array(settlementPaymentSchema).default([]),
   })
   .superRefine((input, ctx) => {
     const participantSet = new Set(input.participantIds);
+
+    input.payments.forEach((payment, index) => {
+      if (payment.fromId === payment.toId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `A ${index}. kiegyenlítés fizetője és kedvezményezettje ugyanaz a személy.`,
+          path: ['payments', index, 'toId'],
+        });
+      }
+      ['fromId', 'toId'].forEach((field) => {
+        if (!participantSet.has(payment[field])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `A ${index}. kiegyenlítés egyik résztvevője (${payment[field]}) nem résztvevője az eseménynek.`,
+            path: ['payments', index, field],
+          });
+        }
+      });
+    });
 
     input.expenses.forEach((expense, index) => {
       if (!participantSet.has(expense.payerId)) {
@@ -79,16 +113,43 @@ export const balanceResponseSchema = z.object({
   personId: personIdSchema,
   paidMinor: amountMinorSchema,
   owedMinor: amountMinorSchema,
+  /**
+   * A személy kiegyenlítéseinek előjeles forint-összege: aki fizetett, annak
+   * `+`, aki kapta, annak `−`. Külön mező, nem a `paidMinor`-ba olvasztva —
+   * a kiegyenlítés nem kiadás, tehát a „kifizette" oszlop nem mozdulhat tőle.
+   */
+  settledMinor: amountMinorSchema,
   balanceMinor: amountMinorSchema,
 });
 
+/**
+ * A fizetési jegyzék egy sora. Az `amountMinor` a kiadásokból számolt teljes
+ * tartozás ezen a pároson, a `creditedMinor` az eddig beszámított rész, a
+ * `remainingMinor` a hátralék. A sor összege NEM változik attól, hogy
+ * fizetnek rá — ez a funkció alapszabálya.
+ */
 export const transferResponseSchema = z.object({
   fromId: personIdSchema,
   toId: personIdSchema,
   amountMinor: amountMinorSchema,
+  creditedMinor: amountMinorSchema,
+  remainingMinor: amountMinorSchema,
+});
+
+/**
+ * Szelvényenkénti bontás, a bemeneti `payments` SORRENDJÉBEN: mennyi számított
+ * be a jegyzékbe, és mennyi maradt kerekítésként (túlfizetés, illetve olyan
+ * páros, ami a mostani jegyzékben már nem szerepel).
+ */
+export const paymentCreditResponseSchema = z.object({
+  creditedMinor: amountMinorSchema,
+  roundingMinor: amountMinorSchema,
 });
 
 export const settlementResponseSchema = z.object({
   balances: z.array(balanceResponseSchema),
   transfers: z.array(transferResponseSchema),
+  paymentCredits: z.array(paymentCreditResponseSchema),
+  /** Az összes olyan forint, ami egyetlen jegyzéksorba sem tudott beszámítani. */
+  unmatchedCreditMinor: amountMinorSchema,
 });

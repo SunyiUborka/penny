@@ -1,18 +1,22 @@
 import {
   createEventBodySchema,
   createExpenseBodySchema,
+  createSettlementPaymentBodySchema,
   eventListResponseSchema,
   eventResponseSchema,
+  eventStreamMessageSchema,
   expenseListResponseSchema,
   expenseResponseSchema,
-  expenseStreamMessageSchema,
+  settlementPaymentListResponseSchema,
+  settlementPaymentResponseSchema,
   settlementResponseSchema,
   updateEventBodySchema,
 } from '@filler/shared';
 import * as eventService from '../services/eventService.js';
 import * as expenseService from '../services/expenseService.js';
 import * as settlementService from '../services/settlementService.js';
-import { subscribeToExpenseChanges } from '../services/eventBus.js';
+import * as settlementPaymentService from '../services/settlementPaymentService.js';
+import { subscribeToEventChanges } from '../services/eventBus.js';
 import { idParamsSchema } from '../schemas/params.js';
 import { corsHeadersFor } from '../config/cors.js';
 
@@ -89,8 +93,32 @@ export default function eventsRoutes(fastify) {
     },
   );
 
+  fastify.get(
+    '/:id/settlement-payments',
+    { schema: { params: idParamsSchema, response: { 200: settlementPaymentListResponseSchema } } },
+    (request) => {
+      return settlementPaymentService.listPaymentsForEvent(request.params.id);
+    },
+  );
+
+  fastify.post(
+    '/:id/settlement-payments',
+    {
+      schema: {
+        params: idParamsSchema,
+        body: createSettlementPaymentBodySchema,
+        response: { 201: settlementPaymentResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const payment = await settlementPaymentService.createPayment(request.params.id, request.body);
+      return reply.status(201).send(payment);
+    },
+  );
+
   /**
-   * Élő kiadás-frissítés Server-Sent Events-szel. Egyirányú (szerver →
+   * Élő frissítés Server-Sent Events-szel: kiadás- és kiegyenlítés-üzenetek
+   * ugyanezen az egy, eseményenkénti csatornán. Egyirányú (szerver →
    * kliens), sima HTTP-n, ezért a böngésző EventSource-a magától
    * újrakapcsolódik, és a session cookie same-origin kérésként átmegy — a
    * hitelesítést a védett /api prefix requireAuth hookja adja.
@@ -132,7 +160,7 @@ export default function eventsRoutes(fastify) {
      */
     const send = (message) => {
       try {
-        const payload = JSON.stringify(expenseStreamMessageSchema.parse(message));
+        const payload = JSON.stringify(eventStreamMessageSchema.parse(message));
         reply.raw.write(`data: ${payload}\n\n`);
       } catch (error) {
         // A publish szinkron emit: egy megszakadt kliens-kapcsolat írási hibája
@@ -142,7 +170,7 @@ export default function eventsRoutes(fastify) {
       }
     };
 
-    const unsubscribe = subscribeToExpenseChanges(request.params.id, send);
+    const unsubscribe = subscribeToEventChanges(request.params.id, send);
     const heartbeat = setInterval(() => {
       reply.raw.write(': ping\n\n');
     }, HEARTBEAT_MS);

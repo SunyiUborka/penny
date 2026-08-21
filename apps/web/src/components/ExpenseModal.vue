@@ -9,7 +9,7 @@ import {
   SUPPORTED_CURRENCIES,
 } from '@filler/shared';
 import { fetchRateWithCache } from '../offline/rates.js';
-import { toDateInputValue } from '../utils/format.js';
+import { roundRate, toDateInputValue } from '../utils/format.js';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -341,7 +341,7 @@ async function fetchRate() {
   rateEstimated.value = false;
   try {
     const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY);
-    exchangeRate.value = result.rate;
+    exchangeRate.value = roundRate(result.rate);
     rateFetchedAt.value = result.fetchedAt;
     rateSource.value = 'api';
     rateEstimated.value = result.estimated;
@@ -738,22 +738,8 @@ onUnmounted(() => {
               }}</output>
             </template>
           </div>
-          <div class="field">
-            <label for="expense-currency">Valuta</label>
-            <select id="expense-currency" v-model="currency" :disabled="saving">
-              <option v-for="code in SUPPORTED_CURRENCIES" :key="code" :value="code">
-                {{ code }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <p v-if="fieldErrors.amount" role="alert" class="field-error">{{ fieldErrors.amount }}</p>
-
-        <template v-if="!isSettlementCurrency">
-          <div class="field expense-modal__rate-field">
-            <label for="expense-rate"
-              >Árfolyam (1 {{ currency }} = ? {{ SETTLEMENT_CURRENCY }})</label
-            >
+          <div v-if="!isSettlementCurrency" class="field expense-modal__rate-field">
+            <label for="expense-rate">Árfolyam</label>
             <div class="expense-modal__rate-row">
               <input
                 id="expense-rate"
@@ -765,21 +751,33 @@ onUnmounted(() => {
               />
               <button
                 type="button"
-                class="btn btn--ghost btn--small"
+                class="btn btn--ghost expense-modal__rate-refresh"
                 :disabled="saving || rateLoading"
+                title="Árfolyam frissítése"
+                aria-label="Árfolyam frissítése"
                 @click="fetchRate"
               >
-                {{ rateLoading ? 'Frissítés…' : 'Frissítés' }}
+                {{ rateLoading ? '…' : '↻' }}
               </button>
             </div>
-            <p v-if="rateEstimated" class="expense-modal__rate-note">
-              ≈ Becsült árfolyam a legutóbb letöltött adatból. A végleges érték mentéskor dől el (ha
-              a mentés sorbanállítással végződik, akkor a feltöltéskor), friss árfolyammal.
-            </p>
           </div>
-          <div class="expense-modal__rate-error-slot">
-            <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
+          <div class="field expense-modal__currency-field">
+            <label for="expense-currency">Valuta</label>
+            <select id="expense-currency" v-model="currency" :disabled="saving">
+              <option v-for="code in SUPPORTED_CURRENCIES" :key="code" :value="code">
+                {{ code }}
+              </option>
+            </select>
           </div>
+        </div>
+        <p v-if="fieldErrors.amount" role="alert" class="field-error">{{ fieldErrors.amount }}</p>
+
+        <template v-if="!isSettlementCurrency">
+          <p v-if="rateEstimated" class="expense-modal__rate-note">
+            ≈ Becsült árfolyam a legutóbb letöltött adatból. A végleges érték mentéskor dől el (ha a
+            mentés sorbanállítással végződik, akkor a feltöltéskor), friss árfolyammal.
+          </p>
+          <p v-if="rateError" role="alert" class="field-error">{{ rateError }}</p>
         </template>
 
         <p v-if="errorMessage" role="alert" class="field-error">{{ errorMessage }}</p>
@@ -827,11 +825,62 @@ onUnmounted(() => {
 
 .modal__row {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
 
 .modal__row .field {
   flex: 1;
+  min-width: 0;
+}
+
+.modal__row .field input,
+.modal__row .field select {
+  min-width: 0;
+  width: 100%;
+}
+
+.modal__row .expense-modal__currency-field {
+  flex: 0 0 5rem;
+}
+
+.modal__row .expense-modal__rate-field {
+  flex: 0 1 8.5rem;
+}
+
+.expense-modal__rate-refresh {
+  flex: none;
+  padding: 0.45em 0.6em;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@media (max-width: 520px) {
+  .modal {
+    padding: var(--space-4);
+  }
+
+  .modal__row {
+    gap: var(--space-2);
+  }
+
+  .modal__row .expense-modal__currency-field {
+    flex: 0 0 4.5rem;
+  }
+
+  .modal__row .expense-modal__currency-field select {
+    padding-left: 0.2em;
+    padding-right: 0;
+  }
+
+  .modal__row .expense-modal__rate-field {
+    flex: 0 1 7.75rem;
+  }
+
+  .modal__row .expense-modal__rate-row input {
+    padding-left: 0.3em;
+    padding-right: 0.3em;
+  }
 }
 
 .modal__fieldset {
@@ -862,10 +911,7 @@ onUnmounted(() => {
 
 .expense-modal__rate-row input {
   flex: 1;
-}
-
-.expense-modal__rate-field {
-  margin-bottom: 0;
+  min-width: 0;
 }
 
 .expense-modal__preview {
@@ -879,10 +925,6 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.expense-modal__rate-error-slot {
-  min-height: 1.3rem;
 }
 
 .expense-modal__preview-slot {

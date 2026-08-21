@@ -47,13 +47,17 @@ async function handleLogout() {
     <button
       type="button"
       class="app-nav__menu-toggle"
-      aria-label="Menü megnyitása"
+      :aria-label="mobileMenuOpen ? 'Menü bezárása' : 'Menü megnyitása'"
       :aria-expanded="mobileMenuOpen"
       @click="mobileMenuOpen = !mobileMenuOpen"
     >
       {{ mobileMenuOpen ? '✕' : '☰' }}
     </button>
-    <nav class="app-nav__tabs" :class="{ 'is-open': mobileMenuOpen }">
+    <nav
+      class="app-nav__tabs"
+      :class="{ 'is-open': mobileMenuOpen }"
+      @click="mobileMenuOpen = false"
+    >
       <router-link to="/" class="app-nav__tab">Események</router-link>
       <router-link
         v-if="offlineStore.pendingCount + offlineStore.failedCount > 0"
@@ -63,6 +67,9 @@ async function handleLogout() {
         Szinkronizálás ({{ offlineStore.pendingCount + offlineStore.failedCount }})
       </router-link>
       <router-link to="/settings" class="app-nav__tab">Beállítások</router-link>
+      <button type="button" class="app-nav__tab app-nav__tab-logout" @click="handleLogout">
+        Kilépés
+      </button>
     </nav>
     <button
       type="button"
@@ -165,6 +172,10 @@ async function handleLogout() {
   }
 }
 
+.app-nav__tab-logout {
+  display: none;
+}
+
 .app-nav__logout {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -188,13 +199,12 @@ async function handleLogout() {
 
 @media (max-width: 640px) {
   .app-nav {
-    flex-wrap: wrap;
+    position: relative;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
   }
 
   .app-nav__mark {
-    order: 1;
     flex: 1;
   }
 
@@ -202,23 +212,25 @@ async function handleLogout() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    order: 2;
-  }
-
-  .app-nav__theme-toggle {
-    order: 3;
   }
 
   .app-nav__logout {
-    order: 4;
+    display: none;
   }
 
   .app-nav__tabs {
     display: none;
-    order: 5;
-    flex: 0 0 100%;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 20;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: 0;
+    padding: var(--space-2) var(--space-4) var(--space-3);
+    background: var(--paper-raised);
+    border-bottom: 2px solid var(--ink);
+    box-shadow: 0 10px 18px rgb(0 0 0 / 18%);
   }
 
   .app-nav__tabs.is-open {
@@ -226,8 +238,24 @@ async function handleLogout() {
   }
 
   .app-nav__tab {
-    padding: 0.5em 0;
+    padding: 0.65em 0;
     border-bottom: 1px solid var(--rule);
+    text-align: left;
+  }
+
+  .app-nav__tab-logout {
+    display: block;
+    border: none;
+    border-bottom: none;
+    background: none;
+    padding: 0.65em 0;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stamp);
+    cursor: pointer;
   }
 }
 </style>

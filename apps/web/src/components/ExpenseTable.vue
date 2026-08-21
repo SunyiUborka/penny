@@ -366,6 +366,10 @@ async function handleDelete(expense) {
   text-align: right;
 }
 
+.expense-table__table td[data-label='Dátum'] {
+  white-space: nowrap;
+}
+
 .expense-table__description {
   font-weight: 600;
 }
@@ -484,6 +488,23 @@ async function handleDelete(expense) {
 
 /* Mobilon minden kiadás egy kis letépett nyugtaként jelenik meg. */
 @media (max-width: 640px) {
+  .expense-table__toolbar {
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .expense-table__filter {
+    flex: 1;
+  }
+
+  .expense-table__filter label {
+    font-size: 0.7rem;
+  }
+
+  .expense-table__live {
+    margin: 0 0 0.7em;
+  }
+
   .expense-table__table thead {
     display: none;
   }
@@ -497,13 +518,14 @@ async function handleDelete(expense) {
   .expense-table__row {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
     column-gap: var(--space-3);
+    row-gap: 2px;
     background: var(--paper-raised);
     border: 1px solid var(--rule);
     border-radius: 2px;
-    margin-bottom: var(--space-4);
-    padding: var(--space-4) var(--space-3) var(--space-2);
+    margin-bottom: var(--space-3);
+    padding: var(--space-4) var(--space-3) var(--space-3);
   }
 
   .expense-table__row::before {
@@ -522,61 +544,60 @@ async function handleDelete(expense) {
   .expense-table__table td {
     display: block;
     border-bottom: none;
-    padding: 0.2rem 0;
-  }
-
-  .expense-table__table td[data-label='Dátum'] {
-    order: 1;
-  }
-
-  .expense-table__table td[data-label='Kifizette'] {
-    order: 2;
+    padding: 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .expense-table__table td[data-label='Leírás'] {
+    order: 1;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .expense-table__table td[data-label='Dátum'] {
+    order: 2;
+    text-align: right;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+
+  .expense-table__table td[data-label='Kifizette'] {
     order: 3;
-    grid-column: 1 / -1;
-  }
-
-  .expense-table__table td[data-label='Összeg'] {
-    order: 4;
-  }
-
-  .expense-table__table td[data-label='Alapvaluta'] {
-    order: 5;
+    font-size: 0.85rem;
   }
 
   .expense-table__table td[data-label='Osztozók'] {
-    order: 6;
-    grid-column: 1 / -1;
-  }
-
-  .expense-table__description {
-    font-size: 1.05rem;
-  }
-
-  .expense-table__table td[data-label]::before {
-    content: attr(data-label);
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    order: 4;
+    text-align: right;
+    font-size: 0.85rem;
     color: var(--ink-soft);
-    display: block;
   }
 
-  .ledger-table .align-right {
+  .expense-table__table td[data-label='Alapvaluta'] {
+    display: none;
+  }
+
+  .expense-table__table td[data-label='Összeg'] {
+    order: 5;
     text-align: left;
-  }
-
-  .expense-table__table td[data-label='']::before {
-    content: none;
+    font-size: 1.05rem;
+    color: var(--forint);
   }
 
   .expense-table__table td[data-label=''] {
-    order: 7;
-    grid-column: 1 / -1;
-    margin-top: var(--space-2);
+    order: 6;
+    text-align: right;
+  }
+
+  .expense-table__table td[data-label='Osztozók']::before {
+    content: '→ ';
+    color: var(--brass);
+  }
+
+  .ledger-table .align-right {
     text-align: right;
   }
 
@@ -584,13 +605,10 @@ async function handleDelete(expense) {
     animation-name: expense-arrive-card;
   }
 
-  /* A tétel-alsor a kártyás nézetben a saját kiadás-kártyájának
-     folytatása: felül nincs szegély, és a fölötte lévő kártya alsó
-     margóját visszahúzzuk, hogy összeérjenek. */
   .expense-table__items-row {
     display: block;
-    margin-top: calc(-1 * var(--space-4));
-    margin-bottom: var(--space-4);
+    margin-top: calc(-1 * var(--space-3));
+    margin-bottom: var(--space-3);
     background: var(--paper-raised);
     border: 1px solid var(--rule);
     border-top: none;
@@ -600,6 +618,7 @@ async function handleDelete(expense) {
   .expense-table__table .expense-table__items-row td {
     display: block;
     padding: 0;
+    white-space: normal;
   }
 
   .expense-table__items li {

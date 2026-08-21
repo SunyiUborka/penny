@@ -15,6 +15,11 @@
   --stamp: #9a3324;
   --stamp-soft: #f3e4e0;
   --brass: #a9832e;
+  /* A kiegyenlítés (tartozás-rendezés) színe: a réz kap jelentést. Zöld = a
+     csoportra fordított pénz, vörös = tartozás, réz = kézen-közön mozgó pénz
+     — így a szín információt hordoz, és nem kellett új színt bevezetni. */
+  --settle: #a9832e;
+  --settle-soft: #f0e8d6;
   --rule: #cdcbba;
   --rule-strong: #9c9a87;
 
@@ -43,6 +48,8 @@
     --stamp: #e28b7d;
     --stamp-soft: #3a2621;
     --brass: #d8b567;
+    --settle: #d8b567;
+    --settle-soft: #35301f;
     --rule: #3c473e;
     --rule-strong: #57634f;
   }
@@ -58,6 +65,8 @@
   --stamp: #9a3324;
   --stamp-soft: #f3e4e0;
   --brass: #a9832e;
+  --settle: #a9832e;
+  --settle-soft: #f0e8d6;
   --rule: #cdcbba;
   --rule-strong: #9c9a87;
 }
@@ -72,6 +81,8 @@
   --stamp: #e28b7d;
   --stamp-soft: #3a2621;
   --brass: #d8b567;
+  --settle: #d8b567;
+  --settle-soft: #35301f;
   --rule: #3c473e;
   --rule-strong: #57634f;
 }
@@ -173,6 +184,10 @@ button {
   color: var(--stamp);
 }
 
+.money--settle {
+  color: var(--settle);
+}
+
 /* Fogazott nyugtaszél: a tetejét körkörös "kilyukasztásokkal" imitálja a
    háttérszínnel, mintha egy tekercsről lenne letépve. */
 .receipt {
@@ -208,6 +223,11 @@ button {
   color: var(--forint);
   border-radius: 3px;
   transform: rotate(-3deg);
+}
+
+.stamp--settle {
+  border-color: var(--settle);
+  color: var(--settle);
 }
 
 .btn {
@@ -247,6 +267,14 @@ button {
 .btn--ghost {
   border-color: var(--rule);
   color: var(--ink-soft);
+}
+
+/* A kiegyenlítés műveleteinek gombja: réz, hogy első pillantásra se
+   keveredjen a kiadás-felvétellel (zöld). */
+.btn--settle {
+  background: var(--settle);
+  border-color: var(--settle);
+  color: var(--paper-raised);
 }
 
 .btn--danger {

@@ -1,6 +1,7 @@
 import * as eventRepository from '../repositories/eventRepository.js';
 import * as personRepository from '../repositories/personRepository.js';
 import * as expenseRepository from '../repositories/expenseRepository.js';
+import * as settlementPaymentRepository from '../repositories/settlementPaymentRepository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 
 export async function listEvents() {
@@ -65,6 +66,10 @@ export async function deleteEvent(id) {
     throw new NotFoundError('Nincs ilyen esemény.');
   }
   await expenseRepository.deleteAllForEvent(id);
+  // A kiegyenlítések is az eseményhez tartoznak: enélkül a törölt esemény
+  // szelvényei bent maradnának a kollekcióban, és a személytörlés
+  // védőkorlátja egy már nem létező eseményre hivatkozva blokkolna örökre.
+  await settlementPaymentRepository.deleteAllForEvent(id);
 }
 
 /**
@@ -90,6 +95,17 @@ async function assertRemovedParticipantsNotInUse(eventId, newParticipantIds) {
     throw new ConflictError(
       'Résztvevő nem távolítható el, mert az alábbi kiadások fizetőjeként vagy osztozójaként szerepel.',
       { expenses: blockingExpenses },
+    );
+  }
+
+  const blockingPayments = await settlementPaymentRepository.findByEventAndPersonInvolved(
+    eventId,
+    removedIds,
+  );
+  if (blockingPayments.length > 0) {
+    throw new ConflictError(
+      'Résztvevő nem távolítható el, mert kiegyenlítés fizetőjeként vagy kedvezményezettjeként szerepel.',
+      { payments: blockingPayments },
     );
   }
 }

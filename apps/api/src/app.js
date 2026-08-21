@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.js';
 import peopleRoutes from './routes/people.js';
 import eventsRoutes from './routes/events.js';
 import expensesRoutes from './routes/expenses.js';
+import settlementPaymentsRoutes from './routes/settlementPayments.js';
 import ratesRoutes from './routes/rates.js';
 import { requireAuth } from './middleware/requireAuth.js';
 import { initPasswordHash } from './services/authService.js';
@@ -79,6 +80,7 @@ export async function buildApp(env) {
       await protectedApi.register(peopleRoutes, { prefix: '/people' });
       await protectedApi.register(eventsRoutes, { prefix: '/events' });
       await protectedApi.register(expensesRoutes, { prefix: '/expenses' });
+      await protectedApi.register(settlementPaymentsRoutes, { prefix: '/settlement-payments' });
       await protectedApi.register(ratesRoutes, { prefix: '/rates' });
     },
     { prefix: '/api' },
