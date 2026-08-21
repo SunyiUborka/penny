@@ -201,7 +201,26 @@ export const useExpensesStore = defineStore('expenses', {
       const entries = await listByEvent(eventId);
       for (const entry of entries) {
         if (entry.type === 'create') {
-          this.upsertExpense(toPendingExpense(entry));
+          // Ha ehhez a `clientId`-hez MÁR van szerverről kapott sor a
+          // listában, a szintetikus sort nem szúrjuk be: a szerver
+          // ténylegesen létrehozta a kiadást, csak a POST válasza veszett el
+          // (pl. egy proxy időtúllépése a commit UTÁN). Ilyenkor az SSE
+          // meghozza a valódi sort, a `createExpense` catch-ága pedig
+          // beszúrja a szintetikusat is — a kiadás kétszer látszik, és az
+          // elszámolás kétszer is beszámítja. A szerveroldali `clientId`
+          // idempotencia csak a FELTÖLTÉST teszi biztonságossá, a
+          // MEGJELENÍTÉST nem; enélkül a duplikátum ráadásul ragadós volt,
+          // mert minden csendes frissítés újra beszúrta (végső review M11).
+          // Az outbox-bejegyzés szándékosan marad: a következő feltöltés a
+          // `clientId` alapján a meglévő kiadást kapja vissza, és azzal
+          // takarítja el magát.
+          const alreadyOnServer = this.expenses.some(
+            (expense) =>
+              !expense.pending && expense.clientId && expense.clientId === entry.clientId,
+          );
+          if (!alreadyOnServer) {
+            this.upsertExpense(toPendingExpense(entry));
+          }
         }
         if (entry.type === 'update' && entry.expenseId) {
           const existing = this.expenses.find((expense) => expense.id === entry.expenseId);
@@ -390,6 +409,23 @@ export const useExpensesStore = defineStore('expenses', {
      * @param {{ highlight?: boolean }} [options]
      */
     upsertExpense(expense, options = {}) {
+      // Ugyanennek a kiadásnak a szintetikus, még fel nem töltött sora nem
+      // maradhat a listában, ha a szerverről már megjött a valódi: a
+      // `clientId` az egyetlen kapocs a kettő között (az `id`-k szándékosan
+      // különböznek). Az `applyUploadResult` a saját feltöltése után az
+      // outbox-bejegyzés azonosítójából tudja, melyik szintetikus sort kell
+      // levennie — az SSE-n érkező sorról viszont nem tudhatja, ezért kell
+      // ez a `clientId`-alapú hálló: enélkül egy commit UTÁN elveszett POST
+      // válasza duplán megjelenő kiadást és kétszer beszámított összeget
+      // hagyott a képernyőn (végső review M11).
+      if (!expense.pending && expense.clientId) {
+        const duplicate = this.expenses.find(
+          (item) => item.pending && item.id !== expense.id && item.clientId === expense.clientId,
+        );
+        if (duplicate) {
+          this.removeExpense(duplicate.id);
+        }
+      }
       const index = this.expenses.findIndex((item) => item.id === expense.id);
       const alreadyApplied =
         index !== -1 && this.expenses[index].updatedAt.getTime() === expense.updatedAt.getTime();

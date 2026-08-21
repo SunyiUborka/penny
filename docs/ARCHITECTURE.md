@@ -644,6 +644,20 @@ egy `outbox`-bejegyzés véletlenül egy törölt, majd újra létrehozott
 eseményre mutat), a szerver `409`-cel utasítja el ahelyett, hogy csendben a
 másik esemény kiadását adná vissza (`assertSameEvent`).
 
+**A szerveroldali idempotencia a FELTÖLTÉST teszi biztonságossá, a
+MEGJELENÍTÉST nem** — ezért a `clientId`-t a kliens is használja
+duplikátum-szűrésre. Ha egy POST a szerver commitja UTÁN hasal el (pl. egy
+proxy időtúllépése), az SSE meghozza a valódi sort, a `createExpense`
+catch-ága pedig beszúrja a szintetikus `pending:<uuid>` sort is: a kiadás
+kétszer látszik, és a `SettlementPanel` kétszer is beszámítja. Ezt két helyen
+zárjuk ki, mindkettőt a `clientId` alapján (az `id`-k szándékosan
+különböznek): az `upsertExpense` leveszi a szintetikus sort, amikor
+megérkezik ugyanannak a kiadásnak a valódi sora, a `loadPending` pedig nem is
+szúrja be, ha ilyen valódi sor már ott van. Az utóbbi nélkül a duplikátum
+ragadós volt: minden csendes frissítés újra beszúrta. Az outbox-bejegyzés
+ilyenkor szándékosan a sorban marad — a következő feltöltés a `clientId`
+alapján a meglévő kiadást kapja vissza, és azzal takarítja el magát.
+
 ### 10.3 Árfolyam-becslés
 
 `fetchRateWithCache` (`offline/rates.js`) minden sikeres lekérést elment a
