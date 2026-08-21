@@ -5,7 +5,7 @@
   "type": "module",
   "//": "@capacitor/app-nak jelenleg nincs JS importere (az élő frissítés a natív fetch-streamre állt át), de szándékosan telepítve marad: a következő kör a push-értesítéseket célozza, ami ezt fogja használni, és az eltávolítás cap sync-et igényelne és megváltoztathatná az Android vissza gomb kezelését.",
   "scripts": {
-    "sync": "cap sync android",
+    "sync": "node scripts/check-api-base.js && cap sync android",
     "icons": "mkdir -p assets && cp ../web/public/icons/icon-512.png assets/icon.png && cp ../web/public/icons/icon-maskable-512.png assets/icon-foreground.png && npx capacitor-assets generate --android --iconBackgroundColor '#2F6B4F'"
   },
   "devDependencies": {
