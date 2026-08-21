@@ -119,6 +119,7 @@ erDiagram
         Date rateFetchedAt
         number baseAmountMinor "HUF-ra átváltva, mindig ez alapján számol az elszámolás"
         ObjectId[] sharedWithIds "min 1"
+        object[] items "opcionális tételek: description?, amountMinor, baseAmountMinor, sharedWithIds"
     }
     RateCache {
         string from
@@ -146,6 +147,16 @@ Fontos üzleti szabályok, amiket a modell/service réteg kényszerít ki:
   pénznemmel nyíljon meg egy új kiadás űrlapja — az elszámolás mindig
   `SETTLEMENT_CURRENCY` (HUF) alapján történik, ettől függetlenül (lásd
   [6. fejezet](#6-pénzkezelés)).
+- **Tételes számla:** ha a kiadásnak van `items` tömbje, akkor a
+  `sharedWithIds` a **számla résztvevőit** jelenti, a tételek pedig ezen belül
+  szűkítenek (`items ⊆ sharedWithIds ⊆ event.participantIds`, a
+  `createExpenseBodySchema` kényszeríti ki). Az `amountMinor` a tételek
+  összege, a `baseAmountMinor` a tételek forint-összegeinek összege. A
+  tételezés hiányát a mező **elhagyása** jelenti (`items: []` nem érvényes),
+  és az `items` nélküli kiadás jelentése változatlan: egyenlő felosztás a
+  `sharedWithIds` között. A tételek hiánya szerkesztéskor kifejezett
+  `$unset` — a `findByIdAndUpdate` az `undefined` mezőket kihagyná a
+  `$set`-ből, és a régi tételek bent maradnának.
 
 ## 5. Hitelesítés és munkamenet
 
@@ -234,6 +245,16 @@ kényszerít ki és amiket **ESLint szabály is véd** (lásd
   Az árfolyam maga sosem `number`, hanem egy validált decimális **string**
   (`exchangeRateStringSchema`, regex: `^\d+(\.\d+)?$`) — így elkerülhető,
   hogy egy lebegőpontos kerekítési hiba becsússzon az árfolyamba magába.
+- **Tételes számla átváltása** (`convertExpenseAmounts`,
+  `packages/shared/src/currency/convert.js`): minden tétel **külön** váltódik a
+  számla egyetlen árfolyamával, és a kiadás `baseAmountMinor`-ja a tételek
+  forint-összegeinek **összege** — nem a végösszeg egyszeri átváltása. Az
+  elszámolás a `baseAmountMinor`-t írja a fizető „kifizette" oldalára, a
+  tételekből számolt részeket a tartozás oldalára; két különböző kerekítésből
+  néhány fillér elszivárogna, és megsérülne az az invariáns, hogy az
+  egyenlegek összege pontosan 0. Ezért ez a függvény a backend
+  (`buildExpenseData`), a kliens sorbanállított-előnézete és az űrlap
+  forint-előnézete **közös** forrása.
 - **Elszámolási pénznem mindig HUF** (`SETTLEMENT_CURRENCY`), **eseményenkénti
   választás nélkül**. Ez egy valós, korábban előfordult bugra adott
   tudatos válasz: ha egy esemény alapvalutáját a felvett kiadások után
@@ -338,6 +359,13 @@ balanceMinor = paidMinor − owedMinor
 A `balanceMinor` összege pontosan `0` minden esemény esetén (ez egy
 invariáns, amit a séma és a logika együtt garantál). Pozitív egyenleg =
 "jár neki", negatív = "fizetnie kell".
+
+Tételes számlánál a felosztás tételenként történik: minden tétel a saját
+osztozói között oszlik egyenlően, a tétel nélküli kiadás pedig egyetlen
+implicit tétel — így a két eset ugyanazon a kódágon fut. A bemeneti séma
+megköveteli, hogy a tételek alapösszegeinek összege megegyezzen a kiadás
+`baseAmountMinor`-jával; ha nem, dob, és a `SettlementPanel` hibaüzenetet
+mutat helyette — egy hibaüzenet jobb, mint rossz egyenleg.
 
 ### 8.2 Egyenlő osztás kerekítési maradékkal
 
