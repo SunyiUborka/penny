@@ -9,6 +9,9 @@ import { useExpensesStore } from '../stores/expenses.js';
 /** Egyszerre csak egy futás legyen, különben ugyanaz az elem kétszer menne fel. */
 let running = false;
 
+/** Lásd `completedUploadCount`. */
+let completedUploads = 0;
+
 /**
  * Igaz, ha épp fut egy feltöltési kör. Ugyanazt a `running` jelzőt olvassa,
  * amivel a `syncOutbox` az ütközést kizárja — szándékosan nem egy második
@@ -23,6 +26,25 @@ let running = false;
  */
 export function isSyncRunning() {
   return running;
+}
+
+/**
+ * Hány sorbanállított tétel töltődött fel sikeresen ezen a lapon, az app
+ * indulása óta. Monoton növő számláló; az értéke önmagában nem érdekes, a
+ * KÜLÖNBSÉGE az: aki két időpont között összehasonlítja, megtudja, hogy
+ * közben landolt-e feltöltés-eredmény a kiadáslistában.
+ *
+ * A kiadás-store csendes frissítése kérdezi meg (`refreshQuietly`): a lista
+ * `GET`-je és a válasza alkalmazása között a szinkron-motor is írhat a
+ * store-ba (`applyUploadResult`), és ha a `GET` a feltöltés ELŐTTI
+ * adatbázis-állapotot tükrözi, de a válasza KÉSŐBB kerül alkalmazásra, a
+ * friss, valódi sort letörölné — miközben az outbox-bejegyzés már nincs meg,
+ * tehát a `loadPending` sem játszaná vissza. Éppen az a ~30 másodperces
+ * lyuk, aminek a bezárására az `applyUploadResult` készült.
+ * @returns {number}
+ */
+export function completedUploadCount() {
+  return completedUploads;
 }
 
 /**
@@ -128,6 +150,12 @@ export async function syncOutbox() {
         continue;
       }
       uploaded += 1;
+      // A lapszintű, monoton számláló: a csendes frissítés ebből tudja, hogy
+      // a lista `GET`-je alatt landolt-e feltöltés-eredmény (lásd
+      // `completedUploadCount`). A törléseket is számolja, nem csak azt, amit
+      // az `applyUploadResult` beszúr: egy feltöltött TÖRLÉS után egy
+      // feltöltés előtti állapotot tükröző lista visszahozná a törölt sort.
+      completedUploads += 1;
       try {
         applyUploadResult(entry, response);
       } catch (storeError) {
