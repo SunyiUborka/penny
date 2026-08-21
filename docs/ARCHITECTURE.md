@@ -683,8 +683,24 @@ felhasználó egy elavult becslésből számolt egyenleget látott véglegeskén
 tehát a store nem importálhatja a `sync.js`-t — a `rates.js` az a hely,
 ahonnan mindkét hívó eléri.)
 
-Ha az árfolyam **nem dől el véglegesen** (a `/rates` felé hálózathiba vagy
-átmeneti szerverhiba), egyik út sem véglegesíti a becslést: a
+**Az árfolyamról szóló, végleges verdikt kizárólag a `400` és a `404`**
+(`RATE_VERDICT_STATUS_CODES`) — ez a 10.5-beli
+`PAYLOAD_VERDICT_STATUS_CODES` megfelelője, csak a `409` nélkül, aminek a
+`/rates`-en nincs értelme. Minden más `ApiError` **átmeneti**, és ez nem
+elméleti: a `/rates` elsőrangú átmeneti hibája az `502 RATE_UNAVAILABLE`,
+amit a szerver akkor ad, ha a külső szolgáltató hívása hibázott ÉS a saját
+cache-e sem segít — az pedig romlandó, a `rateCacheModel` 24 órás
+TTL-indexe miatt. Egy kimerült API-kvóta mellett tehát minden `/rates` hívás
+`502`-t adna; ha ezt végleges verdiktnek vennénk, a sorbanálló devizás
+kiadások a napokkal korábbi becsléssel mennének fel `rateSource: 'api'`-ként,
+és a feltöltés után a `≈` meg az elszámolás-figyelmeztetés is eltűnne róluk.
+Ugyanezt a `502`-t az **olvasási** út hangosan továbbdobja (kézi
+árfolyam-megadást kérve) — az **írási** út, ami a számot örökre eltárolja,
+nem lehet ennél engedékenyebb.
+
+Ha az árfolyam **nem dől el véglegesen** (a `/rates` felé hálózathiba,
+sémaeltérés vagy nem a `400`/`404` verdiktbe tartozó szerverhiba), egyik út
+sem véglegesíti a becslést: a
 `RateResolutionError` a sorbanállított tételt `pending`-en hagyja, a mentési
 út pedig ilyenkor sorba állítja a kiadást ahelyett, hogy POST-olná. Amíg a
 tétel `pending`, a felület `≈`-vel és az elszámolás figyelmeztetésével
