@@ -79,22 +79,15 @@ export function convertExpenseAmounts(input) {
   const { amountMinor, items, currency, exchangeRate } =
     convertExpenseAmountsInputSchema.parse(input);
 
-  const toBaseAmountMinor = (minorAmount) => {
-    if (currency === SETTLEMENT_CURRENCY) {
-      return minorAmount;
-    }
-    const sourceExponent = getCurrencyExponent(currency);
-    const targetExponent = getCurrencyExponent(SETTLEMENT_CURRENCY);
-    const unscaledRate = new Decimal(exchangeRate)
-      .times(new Decimal(10).pow(sourceExponent - targetExponent))
-      .toString();
-    return convertMinorAmount({
-      amountMinor: minorAmount,
-      rate: unscaledRate,
-      sourceCurrency: currency,
-      targetCurrency: SETTLEMENT_CURRENCY,
-    });
-  };
+  const toBaseAmountMinor = (minorAmount) =>
+    currency === SETTLEMENT_CURRENCY
+      ? minorAmount
+      : convertMinorAmount({
+          amountMinor: minorAmount,
+          rate: exchangeRate,
+          sourceCurrency: currency,
+          targetCurrency: SETTLEMENT_CURRENCY,
+        });
 
   if (!items) {
     return { baseAmountMinor: toBaseAmountMinor(amountMinor), items: undefined };
