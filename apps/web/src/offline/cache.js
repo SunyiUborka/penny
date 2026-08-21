@@ -1,5 +1,6 @@
 import { ZodError } from 'zod';
 import { CACHE_STORE, getDb } from './db.js';
+import { toPlain } from './plain.js';
 import { ApiError } from '../api/client.js';
 import { useOfflineStore } from '../stores/offline.js';
 
@@ -31,7 +32,11 @@ export async function readCache(key, schema) {
  */
 export async function writeCache(key, value) {
   const db = await getDb();
-  await db.put(CACHE_STORE, { key, value, fetchedAt: new Date() });
+  // `toPlain`: ugyanaz a védelem, mint az outboxban — az IndexedDB nem tud
+  // `Proxy`-t klónozni, és egy jövőbeli hívó könnyen reaktív store-adatot
+  // adna ide (a cache írása ma hálózat-friss választ kap, de a határt akkor
+  // is itt kell tartani). Lásd `offline/plain.js`.
+  await db.put(CACHE_STORE, { key, value: toPlain(value), fetchedAt: new Date() });
 }
 
 /**
