@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
-  convertMinorAmount,
+  convertExpenseAmounts,
+  formatMoney,
   getCurrencyExponent,
   MAX_EXPENSE_MAJOR_AMOUNT,
   SETTLEMENT_CURRENCY,
@@ -40,6 +41,27 @@ const rateSource = ref('manual');
 const rateFetchedAt = ref(null);
 const sharedWithIds = ref([...props.event.participantIds]);
 
+const itemized = ref(false);
+/**
+ * Tételsorok az űrlap alakjában: az összeg itt MAJOR egységben van (mint a
+ * kiadás `amountMajor`-ja), a `key` pedig csak a Vue listakulcsa — a
+ * payloadba nem kerül bele.
+ * @type {import('vue').Ref<Array<{ key: number, description: string, amountMajor: number | null, sharedWithIds: string[] }>>}
+ */
+const items = ref([]);
+let nextItemKey = 0;
+
+function createItem(overrides = {}) {
+  nextItemKey += 1;
+  return {
+    key: nextItemKey,
+    description: '',
+    amountMajor: null,
+    sharedWithIds: [...sharedWithIds.value],
+    ...overrides,
+  };
+}
+
 const rateLoading = ref(false);
 const rateError = ref('');
 const rateEstimated = ref(false);
@@ -76,6 +98,12 @@ function snapshot() {
     currency: currency.value,
     exchangeRate: exchangeRate.value,
     sharedWithIds: [...sharedWithIds.value].sort(),
+    itemized: itemized.value,
+    items: items.value.map((item) => ({
+      description: item.description,
+      amountMajor: item.amountMajor,
+      sharedWithIds: [...item.sharedWithIds].sort(),
+    })),
   });
 }
 
@@ -96,6 +124,14 @@ function resetFromExpense(expense) {
     // őrizni.
     rateResolvedByForm.value = false;
     sharedWithIds.value = [...expense.sharedWithIds];
+    itemized.value = Array.isArray(expense.items) && expense.items.length > 0;
+    items.value = (expense.items ?? []).map((item) =>
+      createItem({
+        description: item.description ?? '',
+        amountMajor: item.amountMinor / 10 ** exponent,
+        sharedWithIds: [...item.sharedWithIds],
+      }),
+    );
   } else {
     date.value = todayLocalDateString();
     description.value = '';
@@ -107,6 +143,8 @@ function resetFromExpense(expense) {
     rateFetchedAt.value = null;
     rateResolvedByForm.value = false;
     sharedWithIds.value = [...props.event.participantIds];
+    itemized.value = false;
+    items.value = [];
   }
   nextTick(() => {
     initialSnapshot = snapshot();
@@ -119,6 +157,97 @@ const isDirty = computed(() => snapshot() !== initialSnapshot);
 
 const currencyExponent = computed(() => getCurrencyExponent(currency.value));
 const amountStep = computed(() => (currencyExponent.value === 0 ? '1' : '0.01'));
+
+/**
+ * Egy tételsor összege a pénznem legkisebb egységében. Üres/érvénytelen
+ * bevitelnél 0 — a validáció ezt hibaként jelzi, de a végösszeg addig is
+ * számolható marad.
+ * @param {{ amountMajor: number | null }} item
+ */
+function itemAmountMinor(item) {
+  if (item.amountMajor === null || Number.isNaN(item.amountMajor)) {
+    return 0;
+  }
+  return Math.round(item.amountMajor * 10 ** currencyExponent.value);
+}
+
+const itemsTotalMinor = computed(() =>
+  items.value.reduce((sum, item) => sum + itemAmountMinor(item), 0),
+);
+
+/** A mentendő végösszeg: tételes módban a tételek összege. */
+const effectiveAmountMinor = computed(() =>
+  itemized.value ? itemsTotalMinor.value : amountMinor.value,
+);
+
+const itemsTotalLabel = computed(() =>
+  formatMoney({ amountMinor: itemsTotalMinor.value, currency: currency.value }),
+);
+
+function toggleItemized() {
+  if (itemized.value) {
+    if (
+      items.value.length > 0 &&
+      !window.confirm('A tételbontás elveszik, a végösszeg egyetlen összegként marad. Folytatod?')
+    ) {
+      return;
+    }
+    amountMajor.value =
+      itemsTotalMinor.value > 0 ? itemsTotalMinor.value / 10 ** currencyExponent.value : null;
+    items.value = [];
+    itemized.value = false;
+    return;
+  }
+  // Bekapcsolásnál a már beírt összeg egyetlen tételbe kerül, a számla
+  // minden résztvevőjével — a „közös" tétel. Így semmi nem veszik el.
+  items.value = [createItem({ amountMajor: amountMajor.value })];
+  itemized.value = true;
+}
+
+function addItem() {
+  items.value.push(createItem());
+}
+
+function removeItem(index) {
+  items.value.splice(index, 1);
+  // Tételes módban mindig legyen legalább egy sor: egy üres lista se a
+  // felületen, se a payloadban nem érvényes állapot.
+  if (items.value.length === 0) {
+    addItem();
+  }
+}
+
+function toggleItemParticipant(item, personId) {
+  const index = item.sharedWithIds.indexOf(personId);
+  if (index === -1) {
+    item.sharedWithIds.push(personId);
+  } else {
+    item.sharedWithIds.splice(index, 1);
+  }
+}
+
+function selectAllForItem(item) {
+  item.sharedWithIds = [...sharedWithIds.value];
+}
+
+/**
+ * A számla azon résztvevői, akik egyetlen tételen sem osztoznak. Nem hiba
+ * (szerkesztés közben átmenetileg mindig van ilyen), csak halk jelzés — ők
+ * nem tartoznak semmivel.
+ */
+const participantsWithoutItemLabel = computed(() => {
+  if (!itemized.value) {
+    return '';
+  }
+  const covered = new Set(items.value.flatMap((item) => item.sharedWithIds));
+  const names = sharedWithIds.value
+    .filter((id) => !covered.has(id))
+    .map((id) => participantName(id));
+  if (names.length === 0) {
+    return '';
+  }
+  return `${names.join(', ')} egyetlen tételen sem osztozik — nem tartozik semmivel.`;
+});
 
 watch(amountMajor, (value) => {
   if (value !== null && !Number.isNaN(value) && value > MAX_EXPENSE_MAJOR_AMOUNT) {
@@ -136,19 +265,22 @@ const amountMinor = computed(() => {
 const isSettlementCurrency = computed(() => currency.value === SETTLEMENT_CURRENCY);
 
 const baseAmountPreview = computed(() => {
-  if (amountMinor.value === null || amountMinor.value <= 0) {
+  const amount = effectiveAmountMinor.value;
+  if (amount === null || amount <= 0) {
     return null;
   }
-  if (isSettlementCurrency.value) {
-    return amountMinor.value;
-  }
   try {
-    return convertMinorAmount({
-      amountMinor: amountMinor.value,
-      rate: exchangeRate.value,
-      sourceCurrency: currency.value,
-      targetCurrency: SETTLEMENT_CURRENCY,
-    });
+    // Ugyanaz a függvény, ami a szerveren is számol — így a mutatott szám
+    // pontosan az, ami tárolódni fog (a tételek külön átváltásának összege),
+    // nem a végösszeg egyszeri átváltása.
+    return convertExpenseAmounts({
+      amountMinor: amount,
+      items: itemized.value
+        ? items.value.map((item) => ({ amountMinor: itemAmountMinor(item) }))
+        : undefined,
+      currency: currency.value,
+      exchangeRate: exchangeRate.value,
+    }).baseAmountMinor;
   } catch {
     return null;
   }
@@ -216,8 +348,17 @@ function toggleParticipant(personId) {
   const index = sharedWithIds.value.indexOf(personId);
   if (index === -1) {
     sharedWithIds.value.push(personId);
-  } else {
-    sharedWithIds.value.splice(index, 1);
+    return;
+  }
+  sharedWithIds.value.splice(index, 1);
+  // Aki nem szerepel a számlán, nem szerepelhet a tételein sem — enélkül a
+  // szerver a részhalmaz-invariánson utasítaná el a mentést, egy olyan
+  // chipre hivatkozva, ami a felületen már nem is látszik.
+  for (const item of items.value) {
+    const itemIndex = item.sharedWithIds.indexOf(personId);
+    if (itemIndex !== -1) {
+      item.sharedWithIds.splice(itemIndex, 1);
+    }
   }
 }
 
@@ -233,9 +374,26 @@ function validate() {
   if (!payerId.value) {
     errors.payerId = 'Válassz kifizetőt.';
   }
-  if (amountMinor.value === null || amountMinor.value <= 0) {
+  const maxAmountMinor = MAX_EXPENSE_MAJOR_AMOUNT * 10 ** currencyExponent.value;
+  if (itemized.value) {
+    const itemErrors = items.value.map((item) => {
+      if (itemAmountMinor(item) <= 0) {
+        return 'A tétel összege pozitív szám kell legyen.';
+      }
+      if (item.sharedWithIds.length === 0) {
+        return 'Válassz legalább egy osztozót a tételhez.';
+      }
+      return '';
+    });
+    if (itemErrors.some(Boolean)) {
+      errors.itemRows = itemErrors;
+    }
+    if (itemsTotalMinor.value > maxAmountMinor) {
+      errors.amount = `A végösszeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
+    }
+  } else if (amountMinor.value === null || amountMinor.value <= 0) {
     errors.amount = 'Az összeg pozitív szám kell legyen.';
-  } else if (amountMajor.value > MAX_EXPENSE_MAJOR_AMOUNT) {
+  } else if (amountMinor.value > maxAmountMinor) {
     errors.amount = `Az összeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
   }
   if (sharedWithIds.value.length === 0) {
@@ -255,12 +413,21 @@ function handleSubmit() {
       date: date.value,
       description: description.value.trim(),
       payerId: payerId.value,
-      amountMinor: amountMinor.value,
+      amountMinor: effectiveAmountMinor.value,
       currency: currency.value,
       exchangeRate: exchangeRate.value,
       rateSource: rateSource.value,
       rateFetchedAt: rateSource.value === 'api' ? rateFetchedAt.value : undefined,
       sharedWithIds: sharedWithIds.value,
+      // Nem tételes módban a mező ELHAGYVA megy (undefined): a JSON-ból
+      // kimarad, és a szerver ebből tudja, hogy nincs tételezés.
+      items: itemized.value
+        ? items.value.map((item) => ({
+            ...(item.description.trim() ? { description: item.description.trim() } : {}),
+            amountMinor: itemAmountMinor(item),
+            sharedWithIds: [...item.sharedWithIds],
+          }))
+        : undefined,
     },
     // Kliensoldali kísérő tény, SZÁNDÉKOSAN külön argumentumban: az első
     // argumentum az, ami a szervernek megy, ez pedig soha nem mehet oda.
@@ -353,7 +520,7 @@ onUnmounted(() => {
         <p v-if="fieldErrors.payerId" role="alert" class="field-error">{{ fieldErrors.payerId }}</p>
 
         <fieldset class="modal__fieldset">
-          <legend>Ki osztozik rajta</legend>
+          <legend>{{ itemized ? 'Kik szerepelnek a számlán' : 'Ki osztozik rajta' }}</legend>
           <div class="modal__participants">
             <button
               v-for="id in event.participantIds"
@@ -387,20 +554,111 @@ onUnmounted(() => {
           {{ fieldErrors.description }}
         </p>
 
+        <div class="expense-modal__itemized">
+          <label class="expense-modal__itemized-label">
+            <input
+              type="checkbox"
+              :checked="itemized"
+              :disabled="saving"
+              @change="toggleItemized"
+            />
+            Tételes felosztás
+          </label>
+          <p class="expense-modal__itemized-hint">
+            Egy számla, több tétel — tételenként más osztozókkal.
+          </p>
+        </div>
+
+        <fieldset v-if="itemized" class="modal__fieldset">
+          <legend>Tételek</legend>
+          <div v-for="(item, index) in items" :key="item.key" class="expense-item">
+            <div class="expense-item__row">
+              <input
+                v-model="item.description"
+                type="text"
+                class="expense-item__description"
+                placeholder="Megnevezés (nem kötelező)"
+                :aria-label="`${index + 1}. tétel megnevezése`"
+                :disabled="saving"
+              />
+              <input
+                v-model.number="item.amountMajor"
+                type="number"
+                class="money-input expense-item__amount"
+                :step="amountStep"
+                min="0"
+                :aria-label="`${index + 1}. tétel összege`"
+                :disabled="saving"
+              />
+              <button
+                type="button"
+                class="btn btn--ghost btn--small expense-item__remove"
+                :aria-label="`${index + 1}. tétel törlése`"
+                :disabled="saving"
+                @click="removeItem(index)"
+              >
+                ×
+              </button>
+            </div>
+            <div class="modal__participants">
+              <button
+                type="button"
+                class="participant-chip expense-item__all"
+                :disabled="saving"
+                @click="selectAllForItem(item)"
+              >
+                Mind
+              </button>
+              <button
+                v-for="id in sharedWithIds"
+                :key="id"
+                type="button"
+                class="participant-chip"
+                :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
+                :aria-pressed="item.sharedWithIds.includes(id)"
+                :disabled="saving"
+                @click="toggleItemParticipant(item, id)"
+              >
+                {{ participantName(id) }}
+              </button>
+            </div>
+            <p v-if="fieldErrors.itemRows?.[index]" role="alert" class="field-error">
+              {{ fieldErrors.itemRows[index] }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn--ghost btn--small"
+            :disabled="saving"
+            @click="addItem"
+          >
+            + Tétel
+          </button>
+          <p v-if="participantsWithoutItemLabel" class="expense-modal__no-item-note">
+            {{ participantsWithoutItemLabel }}
+          </p>
+        </fieldset>
+
         <div class="modal__row">
           <div class="field">
-            <label for="expense-amount">Összeg</label>
-            <input
-              id="expense-amount"
-              v-model.number="amountMajor"
-              type="number"
-              class="money-input"
-              :step="amountStep"
-              min="0"
-              :max="MAX_EXPENSE_MAJOR_AMOUNT"
-              required
-              :disabled="saving"
-            />
+            <template v-if="!itemized">
+              <label for="expense-amount">Összeg</label>
+              <input
+                id="expense-amount"
+                v-model.number="amountMajor"
+                type="number"
+                class="money-input"
+                :step="amountStep"
+                min="0"
+                :max="MAX_EXPENSE_MAJOR_AMOUNT"
+                required
+                :disabled="saving"
+              />
+            </template>
+            <template v-else>
+              <span class="expense-modal__pseudo-label">Végösszeg</span>
+              <output class="money expense-modal__total">{{ itemsTotalLabel }}</output>
+            </template>
           </div>
           <div class="field">
             <label for="expense-currency">Valuta</label>
@@ -632,5 +890,78 @@ onUnmounted(() => {
   margin: var(--space-1) 0 0;
   font-size: 0.8rem;
   color: var(--ink-soft);
+}
+
+.expense-modal__itemized {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.expense-modal__itemized-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.expense-modal__itemized-hint,
+.expense-modal__no-item-note {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+/* Tételsor: letépett nyugta-csík a nyugta-lapon belül. */
+.expense-item {
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.expense-item__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.expense-item__description {
+  flex: 1;
+  min-width: 0;
+}
+
+.expense-item__amount {
+  width: 8rem;
+  flex-shrink: 0;
+}
+
+.expense-item__remove {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.expense-item__all {
+  border-style: dashed;
+}
+
+.expense-modal__pseudo-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-2);
+}
+
+.expense-modal__total {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  padding: 0.55em 0;
+}
+
+@media (max-width: 640px) {
+  .expense-item__amount {
+    width: 6rem;
+  }
 }
 </style>
