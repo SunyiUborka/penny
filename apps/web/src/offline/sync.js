@@ -10,6 +10,22 @@ import { useExpensesStore } from '../stores/expenses.js';
 let running = false;
 
 /**
+ * Igaz, ha épp fut egy feltöltési kör. Ugyanazt a `running` jelzőt olvassa,
+ * amivel a `syncOutbox` az ütközést kizárja — szándékosan nem egy második
+ * nyilvántartás ugyanarról.
+ *
+ * A Szinkronizálás képernyő eldobás-művelete kérdezi meg: egy `pending`
+ * tételt nem szabad kidobni a sorból, amíg a motor épp azt (vagy az előtte
+ * lévőket) tölti fel, mert a feltöltés akkor is végbemehet, ha a helyi
+ * bejegyzést közben töröltük — a felhasználó pedig azt látná, hogy az eldobott
+ * kiadás mégis felment.
+ * @returns {boolean}
+ */
+export function isSyncRunning() {
+  return running;
+}
+
+/**
  * Azok a HTTP-státuszkódok, amik az elemről magáról szóló, végleges
  * verdiktet jelentenek: a kliens 400-as (érvénytelen) kérést küldött, a
  * célesemény/kiadás 404-gyel eltűnt, vagy a `clientId` 409-cel más

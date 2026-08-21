@@ -171,7 +171,7 @@ async function handleDelete(expense) {
           :tabindex="expense.pending ? -1 : 0"
           :title="
             expense.pending
-              ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik.'
+              ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
               : undefined
           "
           @click="openEditModal(expense)"
