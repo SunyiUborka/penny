@@ -244,6 +244,13 @@ lekért árfolyamból — **mentéskor** (ha van kapcsolat, az app a becsült
 **feltöltéskor**. Ha épp egyik sem sikerül, a kiadás inkább sorban marad
 („függőben”, `≈` jelzéssel), mint hogy a becslés véglegesként rögzüljön.
 
+Egy **meglévő** kiadás szerkesztése ellenben nem értékeli át az árfolyamot:
+ha a módosítás nem nyúlt az árfolyamhoz (pl. csak a leírás elírását javítja),
+a kiadás korabeli árfolyama változatlan marad — akkor is, ha a szerkesztés
+offline sorba került. Újra lekért árfolyamot csak az kap, amit maga az űrlap
+oldott fel: az új kiadás, illetve a szerkesztés közben megváltoztatott
+pénznem.
+
 Egy tétel csak akkor kerül elakadt („failed”) állapotba, ha a szerver
 véglegesen, magáról a tételről mond nemet (érvénytelen adat, törölt esemény,
 ütköző `clientId`) — ezeket a Szinkronizálás képernyő listázza, „Újra” vagy

@@ -88,14 +88,20 @@ function openEditModal(expense) {
   showModal.value = true;
 }
 
-async function handleSubmit(input) {
+/**
+ * @param {object} input a szervernek szánt kiadás-payload
+ * @param {{ rateResolvedByForm: boolean }} rateMeta kliensoldali kísérő tény
+ * az árfolyam eredetéről (lásd `ExpenseModal.vue`) — a payloadtól
+ * szándékosan elválasztva, mert a szervernek nem küldhető
+ */
+async function handleSubmit(input, rateMeta) {
   saving.value = true;
   formError.value = '';
   try {
     if (editingExpense.value) {
-      await expensesStore.updateExpense(editingExpense.value.id, input);
+      await expensesStore.updateExpense(editingExpense.value.id, input, rateMeta);
     } else {
-      await expensesStore.createExpense(props.event.id, input);
+      await expensesStore.createExpense(props.event.id, input, rateMeta);
     }
     showModal.value = false;
   } catch (error) {

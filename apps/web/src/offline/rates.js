@@ -111,6 +111,14 @@ export async function fetchRateWithCache(from, to) {
  * a „mi számít becslésnek" szabálynak egyetlen helye lehet, különben a
  * felület jelölése és a feltöltés újra-feloldása széttarthat.
  *
+ * **Csak olyan árfolyamra értelmes, amit az űrlap maga oldott fel** (lásd
+ * `ExpenseModal.vue` `rateResolvedByForm`). Egy szerkesztésre betöltött,
+ * hónapokkal korábbi kiadás öröklött árfolyama ugyanígy `api` eredetű és
+ * ugyanígy nem mai — ez a függvény tehát becslésnek látná, pedig az a kiadás
+ * korabeli, végleges árfolyama. Ezért a hívóknak ELŐBB a
+ * `rateResolvedByForm` tényt kell megkérdezniük, és csak azon belül ezt
+ * (végső re-review U2).
+ *
  * @param {{ currency: string, rateSource?: string, rateFetchedAt?: Date | string | null }} payload
  * @returns {boolean}
  */
@@ -192,7 +200,8 @@ export class RateResolutionError extends Error {
  * Ez a függvény szándékosan itt lakik, és nem a szinkron-motorban: **mindkét
  * írási út** hívja — a `stores/expenses.js` `createExpense`-e a mentés
  * pillanatában (ha az űrlapon becsült árfolyam van), és az `offline/sync.js`
- * a sorbanállított tétel feltöltésekor. Amíg csak a szinkron-motorban élt,
+ * a sorbanállított tétel feltöltésekor (ha a bejegyzés árfolyamát az űrlap
+ * oldotta fel, lásd `needsFreshRate`). Amíg csak a szinkron-motorban élt,
  * egy közvetlenül sikeres POST teljesen kihagyta, tehát egy becsült árfolyam
  * VÉGLEGESEN tárolt értékké válhatott — miközben a modal jegyzete és a
  * dokumentáció is az ellenkezőjét ígérte (végső review I5). Az

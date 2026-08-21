@@ -219,6 +219,35 @@ function applyUploadResult(entry, response) {
 }
 
 /**
+ * Kell-e ennél a bejegyzésnél feltöltéskor újra feloldani az árfolyamot?
+ *
+ * **A szabály egy mondat: akkor és csak akkor, ha a payloadban lévő
+ * árfolyamot az űrlap oldotta fel a beküldés pillanatában** — vagyis az egy
+ * JELENKORI árfolyam, aminek az érvényessége az írás idejéhez kötődik, és a
+ * sorban töltött napok alatt elavul. Ha az árfolyam a szerkesztett kiadás
+ * SAJÁT, korabeli értéke (`rateResolvedByForm: false`), akkor történelmi
+ * adat: érintetlenül kell maradnia. A `create` és az `update` bejegyzésre
+ * ugyanez a szabály áll, nincs típus szerinti kivétel.
+ *
+ * Miért kell ehhez a bejegyzés mellett utazó tény, és miért nem elég a
+ * payload: egy hónapokkal korábbi devizás kiadás öröklött árfolyama a
+ * `rateSource`/`rateFetchedAt` mezőkből MEGKÜLÖNBÖZTETHETETLEN egy elavult
+ * becsléstől — mindkettő öreg. Amíg a `withFreshRate` az `update`
+ * bejegyzésekre is lefutott, egy offline leírás-javítás a júniusi vacsorát a
+ * mai árfolyamon értékelte át: a felhasználó egy szót írt át, a kiadás
+ * forint-értéke pedig megváltozott (végső re-review U2).
+ *
+ * A `??` a mező bevezetése ELŐTT sorba állított bejegyzéseket fedi: azoknál
+ * nem tudjuk a tényt, ezért a korábbi viselkedést tartjuk meg — a `create`
+ * feloldódik (egy új kiadás árfolyama mindig jelenkori), az `update` nem.
+ * @param {object} entry
+ * @returns {boolean}
+ */
+function needsFreshRate(entry) {
+  return entry.rateResolvedByForm ?? entry.type === 'create';
+}
+
+/**
  * Egyetlen bejegyzés feltöltése.
  * @param {object} entry
  * @returns {Promise<object | null>} a szerver válasza (törlésnél `null`)
@@ -241,7 +270,9 @@ async function uploadEntry(entry) {
     return null;
   }
 
-  const payload = await withFreshRate(entry.payload);
+  // Csak a jelenkori (az űrlap által feloldott) árfolyamot oldjuk fel újra;
+  // a kiadás korabeli árfolyama érintetlen marad — lásd `needsFreshRate`.
+  const payload = needsFreshRate(entry) ? await withFreshRate(entry.payload) : entry.payload;
 
   if (entry.type === 'create') {
     return apiClient.post(`/events/${entry.eventId}/expenses`, payload, {
