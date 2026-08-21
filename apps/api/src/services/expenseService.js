@@ -1,4 +1,4 @@
-import { convertMinorAmount, SETTLEMENT_CURRENCY } from '@filler/shared';
+import { convertExpenseAmounts, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
@@ -124,6 +124,12 @@ async function getEventOrThrow(eventId) {
 /**
  * @param {{ participantIds: string[] }} event
  * @param {{ payerId: string, sharedWithIds: string[] }} input
+ *
+ * A tételekre nincs külön ellenőrzés, és ez nem kihagyás: a kérés sémája
+ * megköveteli, hogy minden tétel osztozója a kiadás `sharedWithIds`-ében
+ * legyen, ez a függvény pedig a `sharedWithIds`-et az esemény résztvevőihez
+ * méri. Az `items ⊆ sharedWithIds ⊆ event.participantIds` láncból következik,
+ * hogy egy tétel-osztozó sem lehet kívülálló.
  */
 function assertParticipants(event, input) {
   const participantSet = new Set(event.participantIds);
@@ -152,14 +158,15 @@ function buildExpenseData(input) {
   const exchangeRate = isSettlementCurrency ? '1' : input.exchangeRate;
   const rateSource = isSettlementCurrency ? 'manual' : input.rateSource;
   const rateFetchedAt = isSettlementCurrency ? new Date() : (input.rateFetchedAt ?? new Date());
-  const baseAmountMinor = isSettlementCurrency
-    ? input.amountMinor
-    : convertMinorAmount({
-        amountMinor: input.amountMinor,
-        rate: exchangeRate,
-        sourceCurrency: input.currency,
-        targetCurrency: SETTLEMENT_CURRENCY,
-      });
+  // Egy helyen, a shared csomagban: minden tétel külön váltódik a kiadás
+  // egyetlen (itt már kikényszerített) árfolyamával, és a kiadás
+  // `baseAmountMinor`-ja a tételek forint-összegeinek összege.
+  const { baseAmountMinor, items } = convertExpenseAmounts({
+    amountMinor: input.amountMinor,
+    items: input.items,
+    currency: input.currency,
+    exchangeRate,
+  });
 
   return {
     // Update-hívásnál (updateExpenseBodySchema === createExpenseBodySchema)
@@ -179,6 +186,7 @@ function buildExpenseData(input) {
     rateSource,
     rateFetchedAt,
     baseAmountMinor,
+    items,
     sharedWithIds: input.sharedWithIds,
   };
 }
