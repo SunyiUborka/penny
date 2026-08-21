@@ -363,6 +363,7 @@ async function runSync(options = {}) {
 function scheduleRetry() {
   const delay = RETRY_DELAYS_MS[Math.min(retryAttempt, RETRY_DELAYS_MS.length - 1)];
   retryAttempt += 1;
+  console.info(`[szinkron] maradt feltöltésre váró elem, újra ${delay / 1000} s múlva`);
   retryTimer = setTimeout(() => {
     retryTimer = null;
     runSync();
@@ -413,10 +414,16 @@ export async function startAutoSync() {
 
   try {
     await Network.addListener('networkStatusChange', (status) => {
+      // Naplózzuk, hogy az esemény MEGJÖTT-e. Ennek a sornak a jelenléte vagy
+      // hiánya dönti el, hogy egy elmaradó feltöltés oka a hiányzó esemény
+      // vagy a túl korai próbálkozás — eddig ezt csak közvetve tudtuk
+      // kizárni. Androidon `adb logcat -s Capacitor/Console:V` mutatja.
+      console.info('[szinkron] hálózati esemény, connected =', status.connected);
       if (status.connected) {
         runSync({ fromEvent: true });
       }
     });
+    console.info('[szinkron] hálózatfigyelő feliratkozva');
   } catch (error) {
     // Nincs hálózatfigyelő (a natív plugin nincs regisztrálva, vagy a hídon
     // hibázott a feliratkozás). Ez degradált, de nem végzetes állapot: a
