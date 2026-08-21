@@ -592,6 +592,16 @@ onUnmounted(() => {
                 :disabled="saving"
                 @click.prevent="toggleItemized"
               />
+              <!--
+                A pipát ez a `<span>` rajzolja, nem az `<input>` egy
+                pszeudoeleme: az `<input>` helyettesített elem, és a Firefox
+                egyáltalán nem rendereli rajta a `::before`-t — ott a
+                jelölőnégyzet bejelölve is üresnek látszott. Az input maga
+                látszólag rejtett, de fókuszálható marad (a modál
+                fókuszcsapdája és a szóköz így változatlanul működik), a
+                megjelenést pedig a szomszédja adja.
+              -->
+              <span class="expense-modal__checkbox-box" aria-hidden="true"></span>
               Tételes felosztás
             </label>
             <button
@@ -637,6 +647,7 @@ onUnmounted(() => {
                 class="input-line money-input expense-item__amount"
                 :step="amountStep"
                 min="0"
+                placeholder="Összeg"
                 :aria-label="`${index + 1}. tétel összege`"
                 :disabled="saving"
               />
@@ -958,6 +969,7 @@ onUnmounted(() => {
 }
 
 .expense-modal__itemized-label {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -969,17 +981,31 @@ onUnmounted(() => {
 /* Az app egyetlen jelölőnégyzete, ezért itt lakik és nem a theme.css-ben.
    A natív megjelenést a nyugta-nyelv váltja: szögletes doboz, bejelölve
    bankjegy-zöld kitöltéssel — a `participant-chip` kiválasztott állapotának
-   ugyanazokkal a színeivel. */
+   ugyanazokkal a színeivel.
+
+   Az input látszólag rejtett, de NEM `display: none` és nem `visibility:
+   hidden`: fókuszálhatónak kell maradnia, mert a modál fókuszcsapdája
+   (`focusableElements`) rá támaszkodik, és a szóközzel váltás is ezen
+   keresztül megy. A doboz és a pipa a szomszédos `<span>`-en van, mert az
+   `<input>` helyettesített elem: a Firefox nem rendereli rajta a
+   pszeudoelemeket. */
 .expense-modal__checkbox {
-  appearance: none;
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
   width: 1.05rem;
   height: 1.05rem;
   margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.expense-modal__checkbox-box {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
   border: 1.5px solid var(--rule-strong);
   border-radius: 2px;
   background: var(--paper-raised);
-  cursor: pointer;
   display: grid;
   place-content: center;
   transition:
@@ -987,9 +1013,9 @@ onUnmounted(() => {
     border-color 0.15s ease;
 }
 
-/* A pipa az elem elé rajzolt jel, nem betűkarakter: így a méretét a doboz
-   szabja meg, nem a szövegtörzs betűtípusa. */
-.expense-modal__checkbox::before {
+/* A pipa rajzolt jel, nem betűkarakter: így a méretét a doboz szabja meg,
+   nem a szövegtörzs betűtípusa. */
+.expense-modal__checkbox-box::before {
   content: '';
   width: 0.55rem;
   height: 0.3rem;
@@ -999,23 +1025,26 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-.expense-modal__checkbox:checked {
+.expense-modal__checkbox:checked + .expense-modal__checkbox-box {
   background: var(--forint);
   border-color: var(--forint);
 }
 
-.expense-modal__checkbox:checked::before {
+.expense-modal__checkbox:checked + .expense-modal__checkbox-box::before {
   opacity: 1;
 }
 
-.expense-modal__checkbox:focus-visible {
+.expense-modal__checkbox:focus-visible + .expense-modal__checkbox-box {
   outline: 2px solid var(--forint);
   outline-offset: 2px;
 }
 
 .expense-modal__checkbox:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+}
+
+.expense-modal__checkbox:disabled + .expense-modal__checkbox-box {
+  opacity: 0.5;
 }
 
 /* Lenyitó a tétellistához, a kiadáslista `3 tétel` jelölésének párja. */
@@ -1049,7 +1078,7 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .expense-modal__checkbox,
+  .expense-modal__checkbox-box,
   .expense-modal__items-caret {
     transition: none;
   }
