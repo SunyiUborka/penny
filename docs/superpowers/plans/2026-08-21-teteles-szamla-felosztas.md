@@ -28,21 +28,21 @@
 
 Új fájl nem kell — a funkció a meglévő felelősségi körökbe illeszkedik.
 
-| Fájl | Felelősség ebben a projektben |
-| --- | --- |
-| `packages/shared/src/currency/convert.js` | **Módosul:** új `convertExpenseAmounts` — a kiadás (és tételei) forint-értékének egyetlen igazsága. |
-| `packages/shared/src/schemas/expense.js` | **Módosul:** tétel-sémák, `items` a kérésben/válaszban, invariánsok. |
-| `packages/shared/src/schemas/settlement.js` | **Módosul:** `items` az elszámolás bemenetén + invariáns-ellenőrzés. |
-| `packages/shared/src/settlement/computeSettlement.js` | **Módosul:** tételenkénti felosztás (a tétel nélküli kiadás egy implicit tétel). |
-| `apps/api/src/models/expenseModel.js` | **Módosul:** `items` altömb. |
-| `apps/api/src/repositories/expenseRepository.js` | **Módosul:** tétel-szerializálás (ObjectId → string) és a tételek `$unset`-je. |
-| `apps/api/src/services/expenseService.js` | **Módosul:** `buildExpenseData` a `convertExpenseAmounts`-ra épül. |
-| `apps/api/src/services/settlementService.js` | **Módosul:** az `items` átadása a `computeSettlement`-nek. |
-| `apps/web/src/stores/expenses.js` | **Módosul:** a sorbanállított sorok tételenkénti forint-értéke. |
-| `apps/web/src/components/SettlementPanel.vue` | **Módosul:** az `items` átadása a kliensoldali `computeSettlement`-nek. |
-| `apps/web/src/components/ExpenseModal.vue` | **Módosul:** „Tételes felosztás" mód. |
-| `apps/web/src/components/ExpenseTable.vue` | **Módosul:** lenyitható tétel-alsor. |
-| `docs/ARCHITECTURE.md` | **Módosul:** adatmodell, pénzkezelés, elszámolás fejezetek. |
+| Fájl                                                  | Felelősség ebben a projektben                                                                       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/currency/convert.js`             | **Módosul:** új `convertExpenseAmounts` — a kiadás (és tételei) forint-értékének egyetlen igazsága. |
+| `packages/shared/src/schemas/expense.js`              | **Módosul:** tétel-sémák, `items` a kérésben/válaszban, invariánsok.                                |
+| `packages/shared/src/schemas/settlement.js`           | **Módosul:** `items` az elszámolás bemenetén + invariáns-ellenőrzés.                                |
+| `packages/shared/src/settlement/computeSettlement.js` | **Módosul:** tételenkénti felosztás (a tétel nélküli kiadás egy implicit tétel).                    |
+| `apps/api/src/models/expenseModel.js`                 | **Módosul:** `items` altömb.                                                                        |
+| `apps/api/src/repositories/expenseRepository.js`      | **Módosul:** tétel-szerializálás (ObjectId → string) és a tételek `$unset`-je.                      |
+| `apps/api/src/services/expenseService.js`             | **Módosul:** `buildExpenseData` a `convertExpenseAmounts`-ra épül.                                  |
+| `apps/api/src/services/settlementService.js`          | **Módosul:** az `items` átadása a `computeSettlement`-nek.                                          |
+| `apps/web/src/stores/expenses.js`                     | **Módosul:** a sorbanállított sorok tételenkénti forint-értéke.                                     |
+| `apps/web/src/components/SettlementPanel.vue`         | **Módosul:** az `items` átadása a kliensoldali `computeSettlement`-nek.                             |
+| `apps/web/src/components/ExpenseModal.vue`            | **Módosul:** „Tételes felosztás" mód.                                                               |
+| `apps/web/src/components/ExpenseTable.vue`            | **Módosul:** lenyitható tétel-alsor.                                                                |
+| `docs/ARCHITECTURE.md`                                | **Módosul:** adatmodell, pénzkezelés, elszámolás fejezetek.                                         |
 
 ---
 
@@ -51,9 +51,11 @@
 Ez a funkció pénzügyi alapköve: minden tétel külön váltódik a számla egyetlen árfolyamával, és a kiadás forint-összege a részek összege. Ha ez a szám a végösszeg **egyszeri** átváltásából jönne, a fizető „kifizette" oldala és a tételekből számolt tartozás-oldal két különböző kerekítésből származna, és néhány fillér elszivárogna — vagyis megsérülne a `computeSettlement` dokumentált invariánsa, hogy az egyenlegek összege pontosan 0.
 
 **Files:**
+
 - Modify: `packages/shared/src/currency/convert.js` (a fájl végére, a `convertMinorAmount` alá)
 
 **Interfaces:**
+
 - Consumes: `convertMinorAmount`, `SETTLEMENT_CURRENCY` (`./exponents.js`), `amountMinorSchema`, `currencyCodeSchema`, `exchangeRateStringSchema`
 - Produces: `convertExpenseAmounts({ amountMinor, items?, currency, exchangeRate }) → { baseAmountMinor: number, items: object[] | undefined }`. A visszaadott tételek az eredeti tétel-objektumok, mindegyik egy plusz `baseAmountMinor` mezővel. Ismeretlen kulcsokat (pl. `description`, `sharedWithIds`) megtart. Az input-objektum további kulcsait (pl. `date`, `payerId`) figyelmen kívül hagyja — ezért hívható közvetlenül egy teljes kiadás-payloaddal.
 
@@ -248,9 +250,11 @@ git commit -m "feat(shared): a kiadás forint-összege tételenkénti átváltá
 ### Task 2: Tétel-sémák a kiadás kérésében és válaszában
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas/expense.js`
 
 **Interfaces:**
+
 - Consumes: `amountMinorSchema`, `personIdSchema` (`./money.js`)
 - Produces: `expenseItemInputSchema`, `expenseItemResponseSchema`; a `createExpenseBodySchema` (`= updateExpenseBodySchema`) opcionális `items` mezője és három új invariánsa; az `expenseResponseSchema` opcionális `items` mezője (tételenként `baseAmountMinor`-ral). Az `expenseStreamMessageSchema` a válaszsémára épül, tehát külön munka nélkül átveszi a tételeket.
 
@@ -438,36 +442,36 @@ A `createExpenseBodySchema` objektumába, a `sharedWithIds` alá:
 A meglévő `.superRefine((data, ctx) => { ... })` blokk **végére** (a felső korlát ellenőrzése után), a záró `})` előtt:
 
 ```js
-    if (!data.items) {
-      return;
-    }
+if (!data.items) {
+  return;
+}
 
-    const itemsTotalMinor = data.items.reduce((sum, item) => sum + item.amountMinor, 0);
-    if (itemsTotalMinor !== data.amountMinor) {
+const itemsTotalMinor = data.items.reduce((sum, item) => sum + item.amountMinor, 0);
+if (itemsTotalMinor !== data.amountMinor) {
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'A tételek összege nem egyezik a végösszeggel.',
+    path: ['items'],
+  });
+}
+
+// A tételek osztozói a SZÁMLA résztvevői közül kell legyenek. Ez adja az
+// `items ⊆ sharedWithIds ⊆ event.participantIds` láncot, amire a szerver
+// `assertParticipants`-a és a személytörlés/résztvevő-eltávolítás
+// védőkorlátjai (mind `sharedWithIds`-re kérdeznek) változtatás nélkül
+// támaszkodhatnak.
+const billParticipants = new Set(data.sharedWithIds);
+data.items.forEach((item, index) => {
+  item.sharedWithIds.forEach((personId, sharerIndex) => {
+    if (!billParticipants.has(personId)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'A tételek összege nem egyezik a végösszeggel.',
-        path: ['items'],
+        message: 'A tétel osztozója nem szerepel a számla résztvevői között.',
+        path: ['items', index, 'sharedWithIds', sharerIndex],
       });
     }
-
-    // A tételek osztozói a SZÁMLA résztvevői közül kell legyenek. Ez adja az
-    // `items ⊆ sharedWithIds ⊆ event.participantIds` láncot, amire a szerver
-    // `assertParticipants`-a és a személytörlés/résztvevő-eltávolítás
-    // védőkorlátjai (mind `sharedWithIds`-re kérdeznek) változtatás nélkül
-    // támaszkodhatnak.
-    const billParticipants = new Set(data.sharedWithIds);
-    data.items.forEach((item, index) => {
-      item.sharedWithIds.forEach((personId, sharerIndex) => {
-        if (!billParticipants.has(personId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'A tétel osztozója nem szerepel a számla résztvevői között.',
-            path: ['items', index, 'sharedWithIds', sharerIndex],
-          });
-        }
-      });
-    });
+  });
+});
 ```
 
 Az `expenseResponseSchema` objektumába, a `sharedWithIds` alá:
@@ -498,10 +502,12 @@ git commit -m "feat(shared): a kiadás felvihető tételekre bontva"
 ### Task 3: Tételenkénti felosztás az elszámolásban
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas/settlement.js`
 - Modify: `packages/shared/src/settlement/computeSettlement.js`
 
 **Interfaces:**
+
 - Consumes: `splitEqually`, `amountMinorSchema`, `personIdSchema`
 - Produces: a `computeSettlement` bemenetének kiadás-objektuma opcionális `items: [{ baseAmountMinor, sharedWithIds }]` mezőt fogad. A visszatérési érték alakja (`{ balances, transfers }`) nem változik.
 
@@ -623,38 +629,35 @@ A `settlementExpenseSchema` objektumába, a `sharedWithIds` alá:
 A `computeSettlementInputSchema` `superRefine`-jában, a meglévő `expense.sharedWithIds.forEach(...)` blokk **után**, még az `input.expenses.forEach` callbackjén belül:
 
 ```js
-      if (!expense.items) {
-        return;
-      }
+if (!expense.items) {
+  return;
+}
 
-      // A fizető „kifizette" oldalára a kiadás baseAmountMinor-ja kerül, a
-      // tartozás oldalára a tételekből számolt részek. Ha a kettő nem ugyanaz
-      // az összeg, az egyenlegek nem adnának ki nullát — ilyenkor inkább
-      // dobjunk, mint hogy csendben rossz egyenleget mutassunk (a
-      // SettlementPanel ezt a hibát üzenetként jeleníti meg).
-      const itemsBaseTotalMinor = expense.items.reduce(
-        (sum, item) => sum + item.baseAmountMinor,
-        0,
-      );
-      if (itemsBaseTotalMinor !== expense.baseAmountMinor) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `A ${index}. kiadás tételeinek alapösszege (${itemsBaseTotalMinor}) nem egyezik a kiadás alapösszegével (${expense.baseAmountMinor}).`,
-          path: ['expenses', index, 'items'],
-        });
-      }
+// A fizető „kifizette" oldalára a kiadás baseAmountMinor-ja kerül, a
+// tartozás oldalára a tételekből számolt részek. Ha a kettő nem ugyanaz
+// az összeg, az egyenlegek nem adnának ki nullát — ilyenkor inkább
+// dobjunk, mint hogy csendben rossz egyenleget mutassunk (a
+// SettlementPanel ezt a hibát üzenetként jeleníti meg).
+const itemsBaseTotalMinor = expense.items.reduce((sum, item) => sum + item.baseAmountMinor, 0);
+if (itemsBaseTotalMinor !== expense.baseAmountMinor) {
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: `A ${index}. kiadás tételeinek alapösszege (${itemsBaseTotalMinor}) nem egyezik a kiadás alapösszegével (${expense.baseAmountMinor}).`,
+    path: ['expenses', index, 'items'],
+  });
+}
 
-      expense.items.forEach((item, itemIndex) => {
-        item.sharedWithIds.forEach((sharerId, sharerIndex) => {
-          if (!participantSet.has(sharerId)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `A ${index}. kiadás ${itemIndex}. tételének egy osztozója (${sharerId}) nem résztvevője az eseménynek.`,
-              path: ['expenses', index, 'items', itemIndex, 'sharedWithIds', sharerIndex],
-            });
-          }
-        });
+expense.items.forEach((item, itemIndex) => {
+  item.sharedWithIds.forEach((sharerId, sharerIndex) => {
+    if (!participantSet.has(sharerId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `A ${index}. kiadás ${itemIndex}. tételének egy osztozója (${sharerId}) nem résztvevője az eseménynek.`,
+        path: ['expenses', index, 'items', itemIndex, 'sharedWithIds', sharerIndex],
       });
+    }
+  });
+});
 ```
 
 - [ ] **Step 4: Írd át a felosztás ciklusát**
@@ -670,21 +673,21 @@ A `computeSettlementInputSchema` `superRefine`-jában, a meglévő `expense.shar
 A `for (const expense of expenses)` ciklus törzsében a `splitEqually`-t hívó rész helyére:
 
 ```js
-    // A tétel nélküli kiadás EGY implicit tétel — így nincs két kódág, és a
-    // mai (egyenlő felosztású) viselkedés szó szerint ugyanez a számítás.
-    const parts = expense.items ?? [
-      { baseAmountMinor: expense.baseAmountMinor, sharedWithIds: expense.sharedWithIds },
-    ];
+// A tétel nélküli kiadás EGY implicit tétel — így nincs két kódág, és a
+// mai (egyenlő felosztású) viselkedés szó szerint ugyanez a számítás.
+const parts = expense.items ?? [
+  { baseAmountMinor: expense.baseAmountMinor, sharedWithIds: expense.sharedWithIds },
+];
 
-    for (const part of parts) {
-      const shares = splitEqually({
-        amountMinor: part.baseAmountMinor,
-        participantIds: part.sharedWithIds,
-      });
-      for (const share of shares) {
-        owedMinor.set(share.personId, owedMinor.get(share.personId) + share.shareMinor);
-      }
-    }
+for (const part of parts) {
+  const shares = splitEqually({
+    amountMinor: part.baseAmountMinor,
+    participantIds: part.sharedWithIds,
+  });
+  for (const share of shares) {
+    owedMinor.set(share.personId, owedMinor.get(share.personId) + share.shareMinor);
+  }
+}
 ```
 
 A függvény JSDoc-jába, a felosztás leírása után:
@@ -724,12 +727,14 @@ Ebben a taskban három olyan csapda van, amit könnyű átnézni, és mindhárom
 3. A `findByIdAndUpdate` az `undefined` mezőket **kihagyja** a `$set`-ből. Egy tételes → egyszerű szerkesztésnél emiatt a régi `items` bent maradna a dokumentumban: a lista a helyes végösszeget mutatná, az elszámolás viszont a megmaradt tételekből számolna. Ezért a tételek hiánya kifejezett `$unset`.
 
 **Files:**
+
 - Modify: `apps/api/src/models/expenseModel.js`
 - Modify: `apps/api/src/repositories/expenseRepository.js:5-16` (`serialize`), `:52-56` (`updateExpense`)
 - Modify: `apps/api/src/services/expenseService.js` (`buildExpenseData`, `assertParticipants` kommentje)
 - Modify: `apps/api/src/services/settlementService.js:20-26`
 
 **Interfaces:**
+
 - Consumes: `convertExpenseAmounts` (Task 1), a `createExpenseBodySchema` `items` mezője (Task 2), a `computeSettlement` `items` bemenete (Task 3)
 - Produces: a `POST /api/events/:id/expenses` és `PATCH /api/expenses/:id` elfogad és visszaad `items`-et (tételenként `baseAmountMinor`-ral); a `GET /api/events/:id/settlement` tételesen számol
 
@@ -840,15 +845,15 @@ import { convertExpenseAmounts, SETTLEMENT_CURRENCY } from '@filler/shared';
 A `buildExpenseData`-ban a `baseAmountMinor` számítását cseréld erre (a `rateFetchedAt` alatt):
 
 ```js
-  // Egy helyen, a shared csomagban: minden tétel külön váltódik a kiadás
-  // egyetlen (itt már kikényszerített) árfolyamával, és a kiadás
-  // `baseAmountMinor`-ja a tételek forint-összegeinek összege.
-  const { baseAmountMinor, items } = convertExpenseAmounts({
-    amountMinor: input.amountMinor,
-    items: input.items,
-    currency: input.currency,
-    exchangeRate,
-  });
+// Egy helyen, a shared csomagban: minden tétel külön váltódik a kiadás
+// egyetlen (itt már kikényszerített) árfolyamával, és a kiadás
+// `baseAmountMinor`-ja a tételek forint-összegeinek összege.
+const { baseAmountMinor, items } = convertExpenseAmounts({
+  amountMinor: input.amountMinor,
+  items: input.items,
+  currency: input.currency,
+  exchangeRate,
+});
 ```
 
 A `return` objektumban a `baseAmountMinor` sor után:
@@ -974,10 +979,12 @@ git commit -m "feat(api): a tételes számla tárolása és tételenkénti elsz�
 A `SettlementPanel` **a kliensen** számol, a store kiadáslistájából — a szerver `/settlement` végpontja csak a másik fogyasztó. Ezért a tételeknek el kell jutniuk a `computeSettlement`-ig, és a sorbanállított (még fel nem töltött) számla tételeire **a kliensnek magának kell** kiszámolnia a forint-értéket: enélkül a függőben lévő számla tételei `baseAmountMinor` nélkül érkeznének a sémába, ami dobna — és az egész esemény elszámolása hibaállapotba menne, amíg a számla a sorban áll.
 
 **Files:**
+
 - Modify: `apps/web/src/stores/expenses.js:70-135` (`computePendingBaseAmountMinor`, `toPendingExpense`, `toPendingUpdate`)
 - Modify: `apps/web/src/components/SettlementPanel.vue:30-45`
 
 **Interfaces:**
+
 - Consumes: `convertExpenseAmounts` (Task 1), a `computeSettlement` `items` bemenete (Task 3)
 - Produces: a store `expenses` listájának elemein tételes kiadás esetén `items` van, tételenként `baseAmountMinor`-ral — a szervertől kapott és a sorbanállított sorokon egyaránt
 
@@ -1104,9 +1111,11 @@ git commit -m "feat(web): a kliensoldali elszámolás a tételekből számol"
 A meglévő űrlap érintetlen marad kikapcsolt állapotban. Bekapcsolva a „Ki osztozik rajta" blokk jelentése **a számla résztvevői**, és az `Összeg` mező helyére tételsorok kerülnek — a chipek tételenként **csak a számla résztvevőit** kínálják.
 
 **Files:**
+
 - Modify: `apps/web/src/components/ExpenseModal.vue`
 
 **Interfaces:**
+
 - Consumes: `convertExpenseAmounts`, `formatMoney` (`@filler/shared`)
 - Produces: a `submit` esemény payloadja tételes módban `items: [{ description?, amountMinor, sharedWithIds }]`-t tartalmaz, és az `amountMinor` a tételek összege. A második argumentum (`{ rateResolvedByForm }`) változatlan — a kliensoldali kísérő tény továbbra sem kerülhet a payloadba.
 
@@ -1168,21 +1177,21 @@ A `snapshot()` visszatérési objektumába, a `sharedWithIds` sor után:
 A `resetFromExpense` **`if (expense)`** ágába, a `sharedWithIds.value = [...expense.sharedWithIds];` után:
 
 ```js
-    itemized.value = Array.isArray(expense.items) && expense.items.length > 0;
-    items.value = (expense.items ?? []).map((item) =>
-      createItem({
-        description: item.description ?? '',
-        amountMajor: item.amountMinor / 10 ** exponent,
-        sharedWithIds: [...item.sharedWithIds],
-      }),
-    );
+itemized.value = Array.isArray(expense.items) && expense.items.length > 0;
+items.value = (expense.items ?? []).map((item) =>
+  createItem({
+    description: item.description ?? '',
+    amountMajor: item.amountMinor / 10 ** exponent,
+    sharedWithIds: [...item.sharedWithIds],
+  }),
+);
 ```
 
 Az `else` ágba, a `sharedWithIds.value = [...props.event.participantIds];` után:
 
 ```js
-    itemized.value = false;
-    items.value = [];
+itemized.value = false;
+items.value = [];
 ```
 
 - [ ] **Step 3: Írd meg a tétel-műveleteket és a végösszeget**
@@ -1339,28 +1348,28 @@ function toggleParticipant(personId) {
 A `validate()`-ben az összeg-ellenőrzés blokkját cseréld erre:
 
 ```js
-  const maxAmountMinor = MAX_EXPENSE_MAJOR_AMOUNT * 10 ** currencyExponent.value;
-  if (itemized.value) {
-    const itemErrors = items.value.map((item) => {
-      if (itemAmountMinor(item) <= 0) {
-        return 'A tétel összege pozitív szám kell legyen.';
-      }
-      if (item.sharedWithIds.length === 0) {
-        return 'Válassz legalább egy osztozót a tételhez.';
-      }
-      return '';
-    });
-    if (itemErrors.some(Boolean)) {
-      errors.itemRows = itemErrors;
+const maxAmountMinor = MAX_EXPENSE_MAJOR_AMOUNT * 10 ** currencyExponent.value;
+if (itemized.value) {
+  const itemErrors = items.value.map((item) => {
+    if (itemAmountMinor(item) <= 0) {
+      return 'A tétel összege pozitív szám kell legyen.';
     }
-    if (itemsTotalMinor.value > maxAmountMinor) {
-      errors.amount = `A végösszeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
+    if (item.sharedWithIds.length === 0) {
+      return 'Válassz legalább egy osztozót a tételhez.';
     }
-  } else if (amountMinor.value === null || amountMinor.value <= 0) {
-    errors.amount = 'Az összeg pozitív szám kell legyen.';
-  } else if (amountMinor.value > maxAmountMinor) {
-    errors.amount = `Az összeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
+    return '';
+  });
+  if (itemErrors.some(Boolean)) {
+    errors.itemRows = itemErrors;
   }
+  if (itemsTotalMinor.value > maxAmountMinor) {
+    errors.amount = `A végösszeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
+  }
+} else if (amountMinor.value === null || amountMinor.value <= 0) {
+  errors.amount = 'Az összeg pozitív szám kell legyen.';
+} else if (amountMinor.value > maxAmountMinor) {
+  errors.amount = `Az összeg legfeljebb ${MAX_EXPENSE_MAJOR_AMOUNT} lehet.`;
+}
 ```
 
 A `handleSubmit` payloadjában az `amountMinor` sort és az `sharedWithIds` sor utáni részt:
@@ -1387,121 +1396,109 @@ A `handleSubmit` payloadjában az `amountMinor` sort és az `sharedWithIds` sor 
 A „Ki osztozik rajta" `<legend>` sorát cseréld:
 
 ```html
-        <legend>{{ itemized ? 'Kik szerepelnek a számlán' : 'Ki osztozik rajta' }}</legend>
+<legend>{{ itemized ? 'Kik szerepelnek a számlán' : 'Ki osztozik rajta' }}</legend>
 ```
 
 A leírás-mező (`expense-description`) hibaüzenete **után**, az összeg/valuta `modal__row` **előtt** vedd fel a kapcsolót és a tétellistát:
 
 ```html
-        <div class="expense-modal__itemized">
-          <label class="expense-modal__itemized-label">
-            <input
-              type="checkbox"
-              :checked="itemized"
-              :disabled="saving"
-              @change="toggleItemized"
-            />
-            Tételes felosztás
-          </label>
-          <p class="expense-modal__itemized-hint">
-            Egy számla, több tétel — tételenként más osztozókkal.
-          </p>
-        </div>
+<div class="expense-modal__itemized">
+  <label class="expense-modal__itemized-label">
+    <input type="checkbox" :checked="itemized" :disabled="saving" @change="toggleItemized" />
+    Tételes felosztás
+  </label>
+  <p class="expense-modal__itemized-hint">Egy számla, több tétel — tételenként más osztozókkal.</p>
+</div>
 
-        <fieldset v-if="itemized" class="modal__fieldset">
-          <legend>Tételek</legend>
-          <div v-for="(item, index) in items" :key="item.key" class="expense-item">
-            <div class="expense-item__row">
-              <input
-                v-model="item.description"
-                type="text"
-                class="expense-item__description"
-                placeholder="Megnevezés (nem kötelező)"
-                :aria-label="`${index + 1}. tétel megnevezése`"
-                :disabled="saving"
-              />
-              <input
-                v-model.number="item.amountMajor"
-                type="number"
-                class="money-input expense-item__amount"
-                :step="amountStep"
-                min="0"
-                :aria-label="`${index + 1}. tétel összege`"
-                :disabled="saving"
-              />
-              <button
-                type="button"
-                class="btn btn--ghost btn--small expense-item__remove"
-                :aria-label="`${index + 1}. tétel törlése`"
-                :disabled="saving"
-                @click="removeItem(index)"
-              >
-                ×
-              </button>
-            </div>
-            <div class="modal__participants">
-              <button
-                type="button"
-                class="participant-chip expense-item__all"
-                :disabled="saving"
-                @click="selectAllForItem(item)"
-              >
-                Mind
-              </button>
-              <button
-                v-for="id in sharedWithIds"
-                :key="id"
-                type="button"
-                class="participant-chip"
-                :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
-                :aria-pressed="item.sharedWithIds.includes(id)"
-                :disabled="saving"
-                @click="toggleItemParticipant(item, id)"
-              >
-                {{ participantName(id) }}
-              </button>
-            </div>
-            <p v-if="fieldErrors.itemRows?.[index]" role="alert" class="field-error">
-              {{ fieldErrors.itemRows[index] }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="btn btn--ghost btn--small"
-            :disabled="saving"
-            @click="addItem"
-          >
-            + Tétel
-          </button>
-          <p v-if="participantsWithoutItemLabel" class="expense-modal__no-item-note">
-            {{ participantsWithoutItemLabel }}
-          </p>
-        </fieldset>
+<fieldset v-if="itemized" class="modal__fieldset">
+  <legend>Tételek</legend>
+  <div v-for="(item, index) in items" :key="item.key" class="expense-item">
+    <div class="expense-item__row">
+      <input
+        v-model="item.description"
+        type="text"
+        class="expense-item__description"
+        placeholder="Megnevezés (nem kötelező)"
+        :aria-label="`${index + 1}. tétel megnevezése`"
+        :disabled="saving"
+      />
+      <input
+        v-model.number="item.amountMajor"
+        type="number"
+        class="money-input expense-item__amount"
+        :step="amountStep"
+        min="0"
+        :aria-label="`${index + 1}. tétel összege`"
+        :disabled="saving"
+      />
+      <button
+        type="button"
+        class="btn btn--ghost btn--small expense-item__remove"
+        :aria-label="`${index + 1}. tétel törlése`"
+        :disabled="saving"
+        @click="removeItem(index)"
+      >
+        ×
+      </button>
+    </div>
+    <div class="modal__participants">
+      <button
+        type="button"
+        class="participant-chip expense-item__all"
+        :disabled="saving"
+        @click="selectAllForItem(item)"
+      >
+        Mind
+      </button>
+      <button
+        v-for="id in sharedWithIds"
+        :key="id"
+        type="button"
+        class="participant-chip"
+        :class="{ 'is-selected': item.sharedWithIds.includes(id) }"
+        :aria-pressed="item.sharedWithIds.includes(id)"
+        :disabled="saving"
+        @click="toggleItemParticipant(item, id)"
+      >
+        {{ participantName(id) }}
+      </button>
+    </div>
+    <p v-if="fieldErrors.itemRows?.[index]" role="alert" class="field-error">
+      {{ fieldErrors.itemRows[index] }}
+    </p>
+  </div>
+  <button type="button" class="btn btn--ghost btn--small" :disabled="saving" @click="addItem">
+    + Tétel
+  </button>
+  <p v-if="participantsWithoutItemLabel" class="expense-modal__no-item-note">
+    {{ participantsWithoutItemLabel }}
+  </p>
+</fieldset>
 ```
 
 Az összeg/valuta `modal__row`-ban az összeg-mezőt cseréld erre (a valuta `<select>` blokkja változatlan):
 
 ```html
-          <div class="field">
-            <template v-if="!itemized">
-              <label for="expense-amount">Összeg</label>
-              <input
-                id="expense-amount"
-                v-model.number="amountMajor"
-                type="number"
-                class="money-input"
-                :step="amountStep"
-                min="0"
-                :max="MAX_EXPENSE_MAJOR_AMOUNT"
-                required
-                :disabled="saving"
-              />
-            </template>
-            <template v-else>
-              <span class="expense-modal__pseudo-label">Végösszeg</span>
-              <output class="money expense-modal__total">{{ itemsTotalLabel }}</output>
-            </template>
-          </div>
+<div class="field">
+  <template v-if="!itemized">
+    <label for="expense-amount">Összeg</label>
+    <input
+      id="expense-amount"
+      v-model.number="amountMajor"
+      type="number"
+      class="money-input"
+      :step="amountStep"
+      min="0"
+      :max="MAX_EXPENSE_MAJOR_AMOUNT"
+      required
+      :disabled="saving"
+    />
+  </template>
+  <template v-else>
+    <span class="expense-modal__pseudo-label">Végösszeg</span>
+    <output class="money expense-modal__total">{{ itemsTotalLabel }}</output>
+  </template>
+</div>
 ```
 
 - [ ] **Step 8: Vedd fel a stílusokat**
@@ -1614,9 +1611,11 @@ git commit -m "feat(web): egy számla tételekre bontva vihető fel az űrlapon"
 ### Task 7: Lenyitható tétel-alsor a kiadáslistában
 
 **Files:**
+
 - Modify: `apps/web/src/components/ExpenseTable.vue`
 
 **Interfaces:**
+
 - Consumes: a store kiadásain lévő `items` (Task 4 és 5)
 - Produces: nincs új interfész — csak megjelenítés
 
@@ -1648,40 +1647,42 @@ function toggleItems(expenseId) {
 A `<tbody>`-ban a `<tr v-for="expense in filteredExpenses" :key="expense.id" ...>` sort bontsd ketté: kerüljön körbe egy `<template>` a ciklussal, a `<tr>`-ről pedig kerüljön le a `v-for` és a `:key`.
 
 ```html
-      <tbody>
-        <template v-for="expense in filteredExpenses" :key="expense.id">
-          <tr
-            class="expense-table__row"
-            :class="{
+<tbody>
+  <template v-for="expense in filteredExpenses" :key="expense.id">
+    <tr
+      class="expense-table__row"
+      :class="{
               'is-fresh': expensesStore.freshIds.has(expense.id),
               'is-pending': expense.pending,
             }"
-            :tabindex="expense.pending ? -1 : 0"
-            :title="
+      :tabindex="expense.pending ? -1 : 0"
+      :title="
               expense.pending
                 ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
                 : undefined
             "
-            @click="openEditModal(expense)"
-            @keydown.enter="openEditModal(expense)"
-          >
+      @click="openEditModal(expense)"
+      @keydown.enter="openEditModal(expense)"
+    ></tr
+  ></template>
+</tbody>
 ```
 
 A sor `<td>`-i változatlanok, kivéve az „Osztozók" cellát:
 
 ```html
-          <td data-label="Osztozók" class="expense-table__shared">
-            {{ expense.sharedWithIds.map(participantName).join(', ') }}
-            <button
-              v-if="expense.items"
-              type="button"
-              class="expense-table__items-toggle"
-              :aria-expanded="expandedIds.has(expense.id)"
-              @click.stop="toggleItems(expense.id)"
-            >
-              {{ expense.items.length }} tétel
-            </button>
-          </td>
+<td data-label="Osztozók" class="expense-table__shared">
+  {{ expense.sharedWithIds.map(participantName).join(', ') }}
+  <button
+    v-if="expense.items"
+    type="button"
+    class="expense-table__items-toggle"
+    :aria-expanded="expandedIds.has(expense.id)"
+    @click.stop="toggleItems(expense.id)"
+  >
+    {{ expense.items.length }} tétel
+  </button>
+</td>
 ```
 
 A záró `</tr>` után, még a `</template>` előtt:
@@ -1764,31 +1765,31 @@ A `<style scoped>`-ban, a `.expense-table__shared` szabály után:
 A `@media (max-width: 640px)` blokk **végére** (hogy a mobil kártyás nézetben a tétellista a fölötte lévő kártya folytatásának látsszon, ne önálló kártyának):
 
 ```css
-  /* A tétel-alsor a kártyás nézetben a saját kiadás-kártyájának
+/* A tétel-alsor a kártyás nézetben a saját kiadás-kártyájának
      folytatása: felül nincs szegély, és a fölötte lévő kártya alsó
      margóját visszahúzzuk, hogy összeérjenek. */
-  .expense-table__items-row {
-    display: block;
-    margin-top: calc(-1 * var(--space-4));
-    margin-bottom: var(--space-4);
-    background: var(--paper-raised);
-    border: 1px solid var(--rule);
-    border-top: none;
-    padding: 0 var(--space-3) var(--space-3);
-  }
+.expense-table__items-row {
+  display: block;
+  margin-top: calc(-1 * var(--space-4));
+  margin-bottom: var(--space-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-top: none;
+  padding: 0 var(--space-3) var(--space-3);
+}
 
-  .expense-table__table .expense-table__items-row td {
-    display: block;
-    padding: 0;
-  }
+.expense-table__table .expense-table__items-row td {
+  display: block;
+  padding: 0;
+}
 
-  .expense-table__items li {
-    grid-template-columns: 1fr auto;
-  }
+.expense-table__items li {
+  grid-template-columns: 1fr auto;
+}
 
-  .expense-table__item-shared {
-    grid-column: 1 / -1;
-  }
+.expense-table__item-shared {
+  grid-column: 1 / -1;
+}
 ```
 
 - [ ] **Step 4: Ellenőrizd a böngészőben**
@@ -1817,9 +1818,11 @@ git commit -m "feat(web): a tételes számla bontása lenyitható a kiadáslist�
 ### Task 8: Architektúra-dokumentáció és záró ellenőrzés
 
 **Files:**
+
 - Modify: `docs/ARCHITECTURE.md` (4. Adatmodell, 6. Pénzkezelés, 8. Elszámolási algoritmus)
 
 **Interfaces:**
+
 - Consumes: minden korábbi task
 - Produces: nincs kód — a dokumentum a kódbázis leírása, ezt kell szinkronban tartani
 
@@ -1882,6 +1885,7 @@ Run: `npm run lint && npm run format:check && npm run build`
 Expected: mindhárom hibátlan
 
 Kézzel, a dev stackben, egy tiszta eseményen végig:
+
 1. Tételes számla felvitele, mentés → az elszámolás a várt tartozásokat mutatja.
 2. Ugyanaz devizában (EUR) → az „Alapvaluta" oszlop forintot mutat, és a tételek alapösszegének összege pontosan az, ami az oszlopban látszik.
 3. Egy másik böngészőfülön nyitva ugyanaz az esemény → az élő (SSE) frissítés a tételes számlát is behozza, tételekkel.

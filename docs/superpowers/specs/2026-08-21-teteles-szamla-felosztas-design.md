@@ -20,7 +20,7 @@ közösön osztozik.
   egyenlő az adott tétel osztozói között. Aki a duplájából evett, annak két
   tétele van.
 - **Tételenkénti pénznem vagy árfolyam.** Egy számla egy pénznem, egy
-  árfolyam. Ez nem szűkítés kényelmi okból: a számla *egy* fizetési esemény,
+  árfolyam. Ez nem szűkítés kényelmi okból: a számla _egy_ fizetési esemény,
   az árfolyama egyetlen tény.
 - **Tételenkénti fizető.** A számlát egy ember fizette — ez a mai `payerId`,
   számla szinten.
