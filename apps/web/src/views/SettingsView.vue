@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { usePeopleStore } from '../stores/people.js';
+import { useOfflineStore } from '../stores/offline.js';
+import { PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
 
 const peopleStore = usePeopleStore();
+const offlineStore = useOfflineStore();
 
 const newName = ref('');
 const createError = ref('');
@@ -13,6 +16,8 @@ const editingName = ref('');
 const rowError = ref({});
 
 onMounted(() => {
+  // Ez a képernyő egyetlen cache-kulcsból mutat adatot: a névjegyzékből.
+  offlineStore.setVisibleKeys([PEOPLE_CACHE_KEY]);
   peopleStore.fetchPeople();
 });
 

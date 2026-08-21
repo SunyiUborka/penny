@@ -1,12 +1,21 @@
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { useOfflineStore } from '../stores/offline.js';
 
 const password = ref('');
 const authStore = useAuthStore();
+const offlineStore = useOfflineStore();
 const route = useRoute();
 const router = useRouter();
+
+onMounted(() => {
+  // A bejelentkezés semmilyen cache-elt olvasást nem mutat — kijelentkezés
+  // után tehát nem maradhat itt az előző képernyő kulcsairól szóló offline
+  // sáv (lásd `stores/offline.js` `setVisibleKeys`).
+  offlineStore.setVisibleKeys([]);
+});
 
 async function handleSubmit() {
   const success = await authStore.login(password.value);

@@ -10,6 +10,7 @@ import {
 import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
 import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
+import { expensesCacheKey } from '../offline/cacheKeys.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 import { completedUploadCount, isSyncRunning } from '../offline/sync.js';
 import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
@@ -169,7 +170,7 @@ export const useExpensesStore = defineStore('expenses', {
       latestFetchEventId = eventId;
       try {
         const result = await fetchWithCache({
-          key: `expenses:${eventId}`,
+          key: expensesCacheKey(eventId),
           schema: expenseListResponseSchema,
           request: () =>
             apiClient.get(`/events/${eventId}/expenses`, { schema: expenseListResponseSchema }),
@@ -298,7 +299,7 @@ export const useExpensesStore = defineStore('expenses', {
         // cache-tartalék, tehát a képernyőn lévő listát nem cserélheti le
         // egy nála régebbi másolat.
         const expenses = await refreshIntoCache({
-          key: `expenses:${eventId}`,
+          key: expensesCacheKey(eventId),
           request: () =>
             apiClient.get(`/events/${eventId}/expenses`, { schema: expenseListResponseSchema }),
         });

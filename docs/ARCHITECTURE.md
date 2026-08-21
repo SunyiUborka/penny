@@ -552,7 +552,11 @@ egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázi
 
 - **`cache`**: a szervertől kapott olvasások legutóbbi állapota, kulcsonként
   (`fetchWithCache` írja). Kulcsok: `events`, `people`, `expenses:<eseményId>`,
-  `event:<eseményId>` és `rate:<deviza>:<deviza>`.
+  `event:<eseményId>` és `rate:<deviza>:<deviza>`. A kulcsok alakja **egy
+  helyen**, az `offline/cacheKeys.js`-ben él (a `rate:` kulcsokat az
+  `offline/rates.js` képzi, azokat a sáv nem követi) — a store-ok és a
+  nézetek is innen kérik, mert mindkét oldal ugyanezekre a kulcsokra
+  hivatkozik (lásd 10.1, „mit követ a sáv”).
 - **`outbox`**: a még fel nem töltött kiadás-módosítások, `pending`/`failed`
   státusszal.
 
@@ -607,6 +611,37 @@ maradt: a felhasználó látta frissülni a listát, miközben a sáv továbbra 
 azt állította, hogy régi adatot néz. **A „nincs cache-tartalék” tehát nem
 azt jelenti, hogy a cache-t ne is frissítenénk** — a kettő két külön
 kérdés (mit MUTATUNK bukáskor, illetve mit ÍRUNK sikerkor).
+
+**Minden követett kulcsnak kell csendes frissítési útja.** Ez nem stílus
+kérdése: a `people` volt az egyetlen kulcs, amit csak komponens-mountok
+kértek le, és így egy offline mount után a munkamenet végéig elavultra
+jelölve maradt. Mivel a nevek MINDEN képernyőn látszanak, a lehúzásos
+frissítés — ami a szemünk előtt frissítette a listát — nem tudta levenni a
+sávot (végső re-review U1). A névjegyzéknek ezért van `refreshQuietly`-je
+(`stores/people.js`), és a lehúzásos frissítés MINDEN, az adott képernyőn
+látható kulcsot frissít, nem csak a „főlistát”: az eseménylistán az
+`events`+`people` párt, az eseményoldalon az eseményt, a kiadásait és a
+`people`-t (a kiadástábla `@refresh` eseménnyel kéri a szülőtől azt, ami nem
+az övé — ha maga írná a cache-t az esemény kulcsára, a kulcs frissnek
+jelölődne, miközben a fejlécben még a régi adat látszik).
+
+**Mit követ a sáv: pontosan az ÉPPEN LÁTHATÓ kulcsokat.** Az `entries` map
+kulcsonként tartja a frissességet, de a sáv nem az összes felett összesít,
+hanem a nézet által bejelentett `visibleKeys` felett (`stores/offline.js`
+`setVisibleKeys`, `offline/cacheKeys.js` kulcsokkal). Ok: az `entries` a
+munkamenet alatt gyűlik, eseményenkénti kulcsokkal is — egy fél órával
+korábban megnyitott, azóta elavult `event:<id>`/`expenses:<id>` pár így egy
+MÁS képernyőn tartotta volna fent a sávot, a „utoljára frissítve” időbélyeg
+pedig a legrégebbi elavult kulcsé volt, vagyis olyan adat koráról beszélt,
+ami nem is látszik. A `setVisibleKeys` a már nem látható kulcsok állapotát
+el is dobja (így az `entries` nem gyűlik korlátlanul); ez biztonságos, mert
+egy kulcs csak úgy válhat újra láthatóvá, hogy az őt megjelenítő nézet
+mount-ja újra le is kéri. **Minden nézetnek be kell jelentenie a kulcsait a
+mount-jakor** — üres listával is, ha semmilyen cache-elt olvasást nem mutat
+(bejelentkezés, Szinkronizálás): a bejelentés az előzőt teljesen leváltja,
+tehát egy elmaradó hívás az előző képernyő kulcsairól szóló, itt már hamis
+állítást hagyna a sávon. Egy új, cache-elt olvasást megjelenítő nézetnél ez
+a bejelentés a kötelező lépés.
 
 **Ismert, tudatosan vállalt maradék: az élő stream nem írja a cache-t.** Az
 SSE-n érkező kiadásokat (`applyStreamMessage`) a store azonnal megjeleníti,

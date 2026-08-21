@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { eventListResponseSchema, eventResponseSchema } from '@filler/shared';
 import { apiClient } from '../api/client.js';
 import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
+import { EVENTS_CACHE_KEY, eventCacheKey } from '../offline/cacheKeys.js';
 
 export const useEventsStore = defineStore('events', {
   state: () => ({
@@ -15,7 +16,7 @@ export const useEventsStore = defineStore('events', {
       this.error = null;
       try {
         const result = await fetchWithCache({
-          key: 'events',
+          key: EVENTS_CACHE_KEY,
           schema: eventListResponseSchema,
           request: () => apiClient.get('/events', { schema: eventListResponseSchema }),
         });
@@ -41,7 +42,7 @@ export const useEventsStore = defineStore('events', {
         // frissült, az offline sáv pedig továbbra is azt állította, hogy
         // elavult adatot néz (lásd a végső review I4 pontját).
         this.events = await refreshIntoCache({
-          key: 'events',
+          key: EVENTS_CACHE_KEY,
           request: () => apiClient.get('/events', { schema: eventListResponseSchema }),
         });
         // Egy korábbi sikertelen betöltés hibaüzenete itt már elavult: a
@@ -66,7 +67,7 @@ export const useEventsStore = defineStore('events', {
      */
     async fetchEvent(id) {
       const result = await fetchWithCache({
-        key: `event:${id}`,
+        key: eventCacheKey(id),
         schema: eventResponseSchema,
         request: () => apiClient.get('/events/' + id, { schema: eventResponseSchema }),
       });
@@ -93,7 +94,7 @@ export const useEventsStore = defineStore('events', {
      */
     refreshEvent(id) {
       return refreshIntoCache({
-        key: `event:${id}`,
+        key: eventCacheKey(id),
         request: () => apiClient.get('/events/' + id, { schema: eventResponseSchema }),
       });
     },

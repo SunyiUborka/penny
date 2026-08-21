@@ -12,6 +12,17 @@ const props = defineProps({
   people: { type: Array, required: true },
 });
 
+/**
+ * A lehúzásos gesztus a KÉPERNYŐ frissítését jelenti, nem csak a
+ * kiadástábláét — a fejléc eseményadatai és a nevek viszont a szülő
+ * (`EventDetailView`) sajátjai. Ezért itt csak jelezzük a gesztust, a
+ * kiadáslistán túli frissítést a szülő végzi: ha ez a komponens írná a
+ * cache-t azokra a kulcsokra, a kulcs frissnek jelölődne, miközben a
+ * képernyőn még a régi fejléc látszik — vagyis az offline sáv eltűnne egy
+ * még nem frissült adat felett.
+ */
+const emit = defineEmits(['refresh']);
+
 const expensesStore = useExpensesStore();
 
 const payerFilter = ref('');
@@ -28,7 +39,10 @@ onMounted(() => {
   // helyettesítője — böngészőben ne kapjon touch-gesztust.
   if (isNativeApp()) {
     detachPullToRefresh = attachPullToRefresh({
-      onRefresh: () => expensesStore.refreshQuietly(props.event.id),
+      onRefresh: () => {
+        emit('refresh');
+        return expensesStore.refreshQuietly(props.event.id);
+      },
       onProgress: (ratio) => {
         pullRatio.value = ratio;
       },
