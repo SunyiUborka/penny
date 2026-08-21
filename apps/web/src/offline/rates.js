@@ -43,7 +43,18 @@ export async function fetchFreshRate(from, to) {
   const result = await apiClient.get(`/rates?from=${from}&to=${to}`, {
     schema: rateResponseSchema,
   });
-  await writeCache(cacheKey(from, to), { rate: result.rate, fetchedAt: result.fetchedAt });
+  try {
+    await writeCache(cacheKey(from, to), { rate: result.rate, fetchedAt: result.fetchedAt });
+  } catch (writeError) {
+    // Ugyanaz a védett írás, mint az `offline/cache.js` `fetchWithCache`-ében
+    // (és a `refreshIntoCache`-ében): egy írási hiba (betelt vagy megtagadott
+    // tárhely, privát böngészés) nem ronthatja el egy MÁR SIKERES hálózati
+    // választ. Enélkül egy sikeres `/rates` hívás retryable hibává változott:
+    // a `withFreshRate` `RateResolutionError`-ba csomagolta, a `syncOutbox`
+    // megállt — vagyis a tárhelyhiba a teljes sort megállította, pedig a friss
+    // árfolyam ott volt a kezünkben (végső review M9).
+    console.error('Nem sikerült az árfolyamot a cache-be írni:', writeError);
+  }
   return { rate: result.rate, fetchedAt: result.fetchedAt };
 }
 
