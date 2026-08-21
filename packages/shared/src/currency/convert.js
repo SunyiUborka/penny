@@ -48,15 +48,28 @@ const convertExpenseAmountsInputSchema = z
   .object({
     amountMinor: amountMinorSchema.positive(),
     items: z
-      .array(z.object({ amountMinor: amountMinorSchema.positive() }).passthrough())
+      .array(
+        z
+          .object({ amountMinor: amountMinorSchema.positive() })
+          // Teherviselő passthrough: a visszatérési tételek `...item`
+          // spreaddel jönnek létre (lásd lejjebb), tehát a `description` és a
+          // `sharedWithIds` KIZÁRÓLAG emiatt marad a tételen. Ha ez törlődik,
+          // a store `toPendingExpense`/`toPendingUpdate`-je osztozók nélküli
+          // tételeket kap, a `computeSettlement` bemeneti sémája dob, és egy
+          // sorbanálló tételes számla az egész esemény elszámolását hibába
+          // viszi. NE töröld.
+          .passthrough(),
+      )
       .min(1)
       .optional(),
     currency: currencyCodeSchema,
     exchangeRate: exchangeRateStringSchema,
   })
   // A hívók teljes kiadás-payloadot adnak át (dátum, fizető, osztozók is
-  // benne van) — a séma alapból eldobja az ismeretlen kulcsokat, tehát nem
-  // kell szűrni a hívási helyeken.
+  // benne van) — a `.passthrough()` megtartja a top-level extra kulcsokat,
+  // tehát a függvény hívható a teljes payloaddal, szűrés nélkül. Ez a
+  // visszatérési érték szempontjából ártalmatlan, mert a törzs csak a négy
+  // ismert mezőt (amountMinor, items, currency, exchangeRate) destrukturálja.
   .passthrough();
 
 /**
