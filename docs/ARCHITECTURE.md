@@ -663,10 +663,32 @@ cache-től, csak a `fetchedAt` napja. **Ne cseréld ezt vissza a `source`
 mezőre** — az visszahozná a fent leírt, folyamatosan látszódó, értelmét
 vesztett jelölést.
 
-A felvitelkor (esetleg becsült) árfolyam csak előnézet: feltöltéskor a
-szinkron-motor mindig frissen lekéri az árfolyamot (`fetchFreshRate`), és
-ezzel számolja újra a payloadot — a véglegesen tárolt érték emiatt sosem egy
-elavult becslés.
+A felvitelkor (esetleg becsült) árfolyam csak előnézet: a **véglegesen
+tárolt** érték mindig frissen lekért árfolyammal dől el (`fetchFreshRate`),
+sosem egy elavult becsléssel. Ezt a `withFreshRate` (`offline/rates.js`)
+végzi, és **mind a két írási út** hívja:
+
+- a `stores/expenses.js` `createExpense`-e **a mentés pillanatában**, ha az
+  űrlapon becsült árfolyam van (`isEstimatedRate`: devizás, `api` eredetű,
+  de nem mai `rateFetchedAt` — ugyanaz a szabály, amit a `≈` jelölés
+  használ). Friss vagy kézi árfolyamnál nincs mit feloldani;
+- az `offline/sync.js` a **sorbanállított** tétel feltöltésekor.
+
+**A `withFreshRate` ezért az `offline/rates.js`-ben lakik, nem a
+szinkron-motorban.** Amíg csak ott élt, egy közvetlenül sikeres POST teljesen
+kihagyta — egy napokkal korábbi becslés így véglegesen tárolt értékké
+válhatott, `pending` jelzés, `≈` és elszámolás-figyelmeztetés nélkül, tehát a
+felhasználó egy elavult becslésből számolt egyenleget látott véglegesként.
+(Ez egyben import-kör kérdése is: a `sync.js` a kiadás-store-t importálja,
+tehát a store nem importálhatja a `sync.js`-t — a `rates.js` az a hely,
+ahonnan mindkét hívó eléri.)
+
+Ha az árfolyam **nem dől el véglegesen** (a `/rates` felé hálózathiba vagy
+átmeneti szerverhiba), egyik út sem véglegesíti a becslést: a
+`RateResolutionError` a sorbanállított tételt `pending`-en hagyja, a mentési
+út pedig ilyenkor sorba állítja a kiadást ahelyett, hogy POST-olná. Amíg a
+tétel `pending`, a felület `≈`-vel és az elszámolás figyelmeztetésével
+jelzi, hogy az érték még nem végleges.
 
 ### 10.4 Elszámolás offline kiadásokkal
 

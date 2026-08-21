@@ -90,4 +90,102 @@ export async function fetchRateWithCache(from, to) {
   }
 }
 
+/**
+ * Igaz, ha a payloadban lévő árfolyam **becslés**: devizás a kiadás, az
+ * árfolyam a szervertől jött (`api`), de nem a mai napról — vagyis pontosan
+ * az az eset, amit a felület `≈`-vel jelöl (lásd a 10.3 szakaszt: a becslést
+ * a `fetchedAt` NAPJA dönti el, nem a válasz `source` mezője).
+ *
+ * Ez a döntés szándékosan itt, az árfolyam-modulban él, és nem a hívóknál:
+ * a „mi számít becslésnek" szabálynak egyetlen helye lehet, különben a
+ * felület jelölése és a feltöltés újra-feloldása széttarthat.
+ *
+ * @param {{ currency: string, rateSource?: string, rateFetchedAt?: Date | string | null }} payload
+ * @returns {boolean}
+ */
+export function isEstimatedRate(payload) {
+  if (payload.currency === SETTLEMENT_CURRENCY || payload.rateSource !== 'api') {
+    return false;
+  }
+  if (!payload.rateFetchedAt) {
+    // Nem tudjuk, mikori az árfolyam — a zárt irányba tévedünk, és
+    // becslésnek tekintjük (inkább kérjük le újra, mint hogy egy ismeretlen
+    // korú érték maradjon véglegesként).
+    return true;
+  }
+  const fetchedAt = new Date(payload.rateFetchedAt);
+  return Number.isNaN(fetchedAt.getTime()) || !isToday(fetchedAt);
+}
+
+/**
+ * Az árfolyam frissítése közben történt, a kiadás írásáról semmit nem
+ * mondó hiba (hálózathiba a `/rates` felé, vagy a válasza nem illik a
+ * sémára). Szándékosan külön típus, nem puszta továbbdobás: a `syncOutbox`
+ * osztályozója enélkül a kiváltó kivétel TÍPUSA alapján döntene — egy innen
+ * származó `ZodError`-t tévesen a KIADÁS-válasz kontraktus-töréseként
+ * kezelne, és véglegesen `failed`-be tenne egy olyan kiadást, amit még fel
+ * sem küldtünk. Ez a típus a hiba EREDETE alapján osztályoz, nem a
+ * TÍPUSA alapján — a `syncOutbox` ezt ugyanúgy retryable-nek veszi, mint
+ * egy sima hálózathibát. Ne egyszerűsítsük vissza puszta `throw error`-ra;
+ * az eredeti hiba a `cause`-ban megmarad diagnosztikai célra.
+ */
+export class RateResolutionError extends Error {
+  /**
+   * @param {unknown} cause
+   */
+  constructor(cause) {
+    super('Az árfolyam frissítése nem sikerült.');
+    this.name = 'RateResolutionError';
+    this.cause = cause;
+  }
+}
+
+/**
+ * Devizás kiadás payloadja **frissen lekért** árfolyammal: a felvitel
+ * pillanatában legfeljebb egy cache-elt becslés állt rendelkezésre.
+ *
+ * Ez a függvény szándékosan itt lakik, és nem a szinkron-motorban: **mindkét
+ * írási út** hívja — a `stores/expenses.js` `createExpense`-e a mentés
+ * pillanatában (ha az űrlapon becsült árfolyam van), és az `offline/sync.js`
+ * a sorbanállított tétel feltöltésekor. Amíg csak a szinkron-motorban élt,
+ * egy közvetlenül sikeres POST teljesen kihagyta, tehát egy becsült árfolyam
+ * VÉGLEGESEN tárolt értékké válhatott — miközben a modal jegyzete és a
+ * dokumentáció is az ellenkezőjét ígérte (végső review I5). Az
+ * `offline/rates.js` az a hely, ahonnan mindkét hívó elérheti anélkül, hogy
+ * import-kört hoznánk létre (a `sync.js` a kiadás-store-t importálja, tehát
+ * a store nem importálhatja a `sync.js`-t).
+ *
+ * @param {object} payload
+ * @returns {Promise<object>} a payload friss árfolyammal (vagy változatlanul,
+ * ha nincs mit frissíteni, illetve ha a szerver véglegesen nemet mondott)
+ * @throws {RateResolutionError} ha az árfolyam nem dőlt el véglegesen — ilyenkor
+ * a hívónak sorban kell hagynia a tételt, nem szabad becslést véglegesíteni
+ */
+export async function withFreshRate(payload) {
+  if (payload.currency === SETTLEMENT_CURRENCY || payload.rateSource === 'manual') {
+    return payload;
+  }
+  try {
+    const fresh = await fetchFreshRate(payload.currency, SETTLEMENT_CURRENCY);
+    return { ...payload, exchangeRate: fresh.rate, rateFetchedAt: fresh.fetchedAt };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      // A szerver ténylegesen nemet mondott az árfolyamra (pl. nem
+      // támogatott devizapár) — ez végleges verdikt, a becsléssel megyünk
+      // tovább: ez még mindig jobb, mint a kiadást a sorban ragasztani.
+      return payload;
+    }
+    // Hálózathiba vagy sémaeltérés: nem tudjuk, mi a friss árfolyam, de ez
+    // nem végleges — nem szabad csendben ráfogni a becslésre, hogy az a
+    // végleges érték. A tételnek `pending`-en kell maradnia, hogy a
+    // következő (remélhetőleg sikeres) próbálkozáskor valódi árfolyammal
+    // menjen fel. A `RateResolutionError`-ba csomagolva dobjuk tovább, nem
+    // nyersen: a `syncOutbox` osztályozója különben a kiváltó kivétel
+    // TÍPUSA (pl. egy itteni `ZodError`) alapján tévesen a KIADÁS-válasz
+    // kontraktus-töréseként kezelné, és véglegesen `failed`-be tenne egy
+    // olyan kiadást, amit még fel sem küldtünk.
+    throw new RateResolutionError(error);
+  }
+}
+
 export { SETTLEMENT_CURRENCY };

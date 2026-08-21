@@ -390,8 +390,8 @@ onUnmounted(() => {
               </button>
             </div>
             <p v-if="rateEstimated" class="expense-modal__rate-note">
-              ≈ Becsült árfolyam a legutóbb letöltött adatból. A végleges érték a kiadás
-              feltöltésekor dől el.
+              ≈ Becsült árfolyam a legutóbb letöltött adatból. A végleges érték mentéskor dől el (ha
+              a mentés sorbanállítással végződik, akkor a feltöltéskor), friss árfolyammal.
             </p>
           </div>
           <div class="expense-modal__rate-error-slot">

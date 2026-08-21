@@ -11,6 +11,7 @@ import { apiClient, ApiError } from '../api/client.js';
 import { openEventStream } from '../api/eventStream.js';
 import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
+import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
 const FRESH_MS = 1600;
@@ -436,7 +437,36 @@ export const useExpensesStore = defineStore('expenses', {
      */
     async createExpense(eventId, input) {
       const clientId = crypto.randomUUID();
-      const body = { ...input, clientId };
+      let body = { ...input, clientId };
+      // Ha az űrlapon BECSÜLT árfolyam van (devizás, szervertől kapott, de nem
+      // mai árfolyam — lásd `isEstimatedRate`), a mentés pillanatában újra
+      // feloldjuk. Enélkül a `withFreshRate` csak az outbox-on átmenő
+      // tételekre futott: egy közvetlenül sikeres POST teljesen kihagyta,
+      // tehát egy három napos becslés VÉGLEGESEN tárolt értékké vált —
+      // pending jelzés, `≈` és elszámolás-figyelmeztetés nélkül, vagyis a
+      // felhasználó egy elavult becslésből számolt egyenleget látott
+      // véglegesként (végső review I5). A modal jegyzete és a dokumentáció
+      // is ezt ígéri; ezen az úton a „feltöltés" épp ez a POST.
+      // Friss (mai) vagy kézi árfolyamnál nincs mit feloldani: az nem
+      // becslés, és egy felesleges `/rates` kör csak lassítaná a mentést.
+      if (isEstimatedRate(body)) {
+        try {
+          body = await withFreshRate(body);
+        } catch (error) {
+          if (!(error instanceof RateResolutionError)) {
+            throw error;
+          }
+          // Az árfolyam nem dőlt el véglegesen (hálózathiba, átmeneti
+          // szerverhiba a `/rates` felé) — ilyenkor nem POST-olhatunk
+          // becslést véglegesként. A tételt sorba állítjuk: a szinkron-motor
+          // a feltöltéskor újra megkísérli a friss árfolyamot, és addig a sor
+          // `pending`, tehát a felület `≈`-vel és az elszámolás
+          // figyelmeztetéssel jelzi, hogy az érték még nem végleges.
+          const pendingEntry = await enqueue({ type: 'create', eventId, clientId, payload: body });
+          this.upsertExpense(toPendingExpense(pendingEntry));
+          return null;
+        }
+      }
       try {
         const expense = await apiClient.post(`/events/${eventId}/expenses`, body, {
           schema: expenseResponseSchema,
