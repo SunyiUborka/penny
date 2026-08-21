@@ -38,3 +38,15 @@ export function getDb() {
   }
   return dbPromise;
 }
+
+/**
+ * A teljes helyi tár ürítése: a cache-elt olvasások ÉS a még fel nem
+ * töltött írások. Szerverváltáskor hívjuk — a másik szerver adatai mások,
+ * egy ott felvett kiadás feltöltése pedig idegen eseményre mutatna.
+ * @returns {Promise<void>}
+ */
+export async function clearOfflineData() {
+  const db = await getDb();
+  await db.clear(CACHE_STORE);
+  await db.clear(OUTBOX_STORE);
+}

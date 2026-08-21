@@ -12,3 +12,4 @@ export * from './schemas/rate.js';
 export * from './schemas/expense.js';
 export * from './schemas/settlementPayment.js';
 export * from './schemas/eventStream.js';
+export * from './schemas/health.js';

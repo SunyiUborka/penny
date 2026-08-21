@@ -609,8 +609,10 @@ CapacitorWebFetch`-fel olvassuk a streamet, Bearer tokennel, és az
   (lejárt token) és a 404 (törölt esemény) válasz **terminális**: nincs
   értelme ugyanazzal a hitelesítő adattal vagy egy soha meg nem nyíló
   streamre örökké próbálkozni.
-  A natív build API-alapcíme fordítási időben rögzített, abszolút URL
-  (lásd az Android APK fejezetet a README-ben) — emiatt a natív stream-kérés
+  A natív build API-alapcíme abszolút URL: fordítási időben a
+  `VITE_API_BASE_URL` adja, futásidőben a bejelentkezési képernyőn
+  átállítható és a készüléken tárolódik (`native/apiBase.js`, csak HTTPS,
+  lásd az Android APK fejezetet a README-ben) — emiatt a natív stream-kérés
   **cross-origin**, tehát a böngészőmotor CORS-preflighttal kezeli, szemben a
   böngészős `EventSource` same-origin kérésével.
 

@@ -188,6 +188,26 @@ export const useAuthStore = defineStore('auth', {
         throw logoutError;
       }
     },
+
+    /**
+     * Kizárólag helyi munkamenet-takarítás, szerverhívás nélkül: a
+     * szerverváltás pillanatában a régi szerver már nem elérhető (vagy nem
+     * releváns), egy `logout` hívás pedig a RÉGI címre menne.
+     * @returns {Promise<void>}
+     */
+    async resetLocalSession() {
+      this.authenticated = false;
+      this.checked = true;
+      this.loginError = null;
+      await forgetAuthenticated();
+      if (isNativeApp()) {
+        try {
+          await clearToken();
+        } catch (error) {
+          console.error('A munkamenet-token törlése nem sikerült:', error);
+        }
+      }
+    },
   },
 });
 
