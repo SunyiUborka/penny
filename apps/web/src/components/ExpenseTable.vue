@@ -540,7 +540,7 @@ async function handleDelete(expense) {
     border: 1px solid var(--rule);
     border-radius: 2px;
     margin-bottom: var(--space-3);
-    padding: var(--space-4) var(--space-3) var(--space-3);
+    padding: var(--space-4) 2.5rem var(--space-3) var(--space-3);
   }
 
   .expense-table__row::before {
@@ -584,9 +584,16 @@ async function handleDelete(expense) {
     font-size: 0.85rem;
   }
 
-  .expense-table__table td[data-label='Osztozók'] {
+  .expense-table__table td[data-label='Összeg'] {
     order: 4;
     text-align: right;
+    font-size: 1rem;
+    color: var(--forint);
+  }
+
+  .expense-table__table td[data-label='Osztozók'] {
+    order: 5;
+    grid-column: 1 / -1;
     font-size: 0.85rem;
     color: var(--ink-soft);
   }
@@ -595,16 +602,12 @@ async function handleDelete(expense) {
     display: none;
   }
 
-  .expense-table__table td[data-label='Összeg'] {
-    order: 5;
-    text-align: left;
-    font-size: 1.05rem;
-    color: var(--forint);
-  }
-
   .expense-table__table td[data-label=''] {
-    order: 6;
-    text-align: right;
+    position: absolute;
+    top: 50%;
+    right: var(--space-1);
+    width: auto;
+    transform: translateY(-50%);
     overflow: visible;
   }
 
