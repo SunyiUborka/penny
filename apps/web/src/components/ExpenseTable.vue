@@ -186,8 +186,14 @@ async function handleDelete(expense) {
           <td data-label="Összeg" class="align-right money">
             {{ formatMoney({ amountMinor: expense.amountMinor, currency: expense.currency }) }}
           </td>
+          <!--
+            A `≈` („becsült") csak akkor jár, ha ténylegesen történt
+            árfolyam-átváltás: egy forintban rögzített pending sornál az összeg
+            pontos, ott a jelölés azt állította volna, hogy egy pontos szám
+            becsült.
+          -->
           <td data-label="Alapvaluta" class="align-right money money--credit">
-            {{ expense.pending ? '≈ ' : ''
+            {{ expense.pending && expense.currency !== SETTLEMENT_CURRENCY ? '≈ ' : ''
             }}{{
               formatMoney({ amountMinor: expense.baseAmountMinor, currency: SETTLEMENT_CURRENCY })
             }}
