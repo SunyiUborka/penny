@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import ExpenseModal from './ExpenseModal.vue';
+import RowMenu from './RowMenu.vue';
 import { formatDate } from '../utils/format.js';
 import { isNativeApp } from '../utils/platform.js';
 import { attachPullToRefresh } from '../utils/pullToRefresh.js';
@@ -249,14 +250,23 @@ async function handleDelete(expense) {
                 {{ expense.items.length }} tétel
               </button>
             </td>
-            <td v-if="!expense.pending" data-label="">
-              <button
-                type="button"
-                class="btn btn--danger btn--small"
-                @click.stop="handleDelete(expense)"
-              >
-                Törlés
-              </button>
+            <td v-if="!expense.pending" data-label="" class="expense-table__actions">
+              <RowMenu label="Kiadás műveletei">
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--small"
+                  @click="openEditModal(expense)"
+                >
+                  Szerkesztés
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--danger btn--small"
+                  @click="handleDelete(expense)"
+                >
+                  Törlés
+                </button>
+              </RowMenu>
             </td>
           </tr>
           <tr v-if="expense.items && expandedIds.has(expense.id)" class="expense-table__items-row">
@@ -368,6 +378,11 @@ async function handleDelete(expense) {
 
 .expense-table__table td[data-label='Dátum'] {
   white-space: nowrap;
+}
+
+.expense-table__actions {
+  text-align: right;
+  width: 1%;
 }
 
 .expense-table__description {
@@ -590,6 +605,7 @@ async function handleDelete(expense) {
   .expense-table__table td[data-label=''] {
     order: 6;
     text-align: right;
+    overflow: visible;
   }
 
   .expense-table__table td[data-label='Osztozók']::before {
