@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ZodError } from 'zod';
+import { settlementProgressOf } from '@filler/shared';
 import { ApiError } from '../api/client.js';
 import { useEventsStore } from '../stores/events.js';
 import { usePeopleStore } from '../stores/people.js';
@@ -18,6 +19,8 @@ import EventFormModal from '../components/EventFormModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import { formatDate } from '../utils/format.js';
+import { computeEventSettlement } from '../utils/settlement.js';
+import { eventStatusBadge, eventStatusStampClass } from '../utils/eventStatus.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -53,6 +56,24 @@ const participantNames = computed(() => {
     return '';
   }
   return event.value.participantIds.map((id) => peopleStore.nameById(id)).join(', ');
+});
+
+const statusBadge = computed(() => {
+  if (!event.value) {
+    return null;
+  }
+  const live =
+    expensesStore.loading || paymentsStore.loading
+      ? null
+      : computeEventSettlement({
+          event: event.value,
+          expenses: expensesStore.expenses,
+          payments: paymentsStore.payments,
+        });
+  return eventStatusBadge({
+    archived: event.value.archived,
+    settlement: live ? settlementProgressOf(live.transfers) : event.value.settlement,
+  });
 });
 
 const dateRangeLabel = computed(() => {
@@ -250,9 +271,19 @@ async function handleDelete() {
           <p class="event-detail__meta">{{ participantNames }} {{ dateRangeLabel }}</p>
         </div>
         <div class="event-detail__side">
-          <span class="stamp" title="Új kiadás felvételekor előre kijelölt pénznem">
-            {{ event.defaultCurrency }}
-          </span>
+          <div class="event-detail__stamps">
+            <span
+              v-if="event.archived"
+              class="stamp stamp--small"
+              :class="eventStatusStampClass(statusBadge)"
+              :title="statusBadge.title"
+            >
+              {{ statusBadge.label }}
+            </span>
+            <span class="stamp" title="Új kiadás felvételekor előre kijelölt pénznem">
+              {{ event.defaultCurrency }}
+            </span>
+          </div>
           <div class="event-detail__actions">
             <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
               Szerkesztés
@@ -352,6 +383,12 @@ async function handleDelete() {
 
 .event-detail__actions {
   display: flex;
+  gap: var(--space-2);
+}
+
+.event-detail__stamps {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
 
@@ -459,6 +496,7 @@ async function handleDelete() {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: var(--space-3);
   }
 

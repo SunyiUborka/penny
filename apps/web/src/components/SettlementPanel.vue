@@ -1,9 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { computeSettlement, formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
+import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
 import { useSettlementPaymentsStore } from '../stores/settlementPayments.js';
 import { formatDate } from '../utils/format.js';
+import { computeEventSettlement } from '../utils/settlement.js';
 import RowMenu from './RowMenu.vue';
 import SettlementPaymentModal from './SettlementPaymentModal.vue';
 
@@ -41,26 +42,11 @@ const actionError = ref('');
  * vissza.
  */
 const settlement = computed(() => {
-  try {
-    return computeSettlement({
-      participantIds: props.event.participantIds,
-      expenses: expensesStore.expenses.map((expense) => ({
-        payerId: expense.payerId,
-        baseAmountMinor: expense.baseAmountMinor,
-        sharedWithIds: expense.sharedWithIds,
-        ...(expense.items ? { items: expense.items } : {}),
-      })),
-      payments: paymentsStore.payments.map((payment) => ({
-        fromId: payment.fromId,
-        toId: payment.toId,
-        baseAmountMinor: payment.baseAmountMinor,
-        date: payment.date,
-        createdAt: payment.createdAt,
-      })),
-    });
-  } catch {
-    return null;
-  }
+  return computeEventSettlement({
+    event: props.event,
+    expenses: expensesStore.expenses,
+    payments: paymentsStore.payments,
+  });
 });
 
 // A betöltés állapota a két listáé: az elszámolásnak nincs saját kérése.

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useEventsStore } from '../stores/events.js';
@@ -8,6 +8,7 @@ import { useOfflineStore } from '../stores/offline.js';
 import { EVENTS_CACHE_KEY, PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
 import { formatDate } from '../utils/format.js';
+import { eventStatusBadge, eventStatusStampClass } from '../utils/eventStatus.js';
 import { isNativeApp } from '../utils/platform.js';
 import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
@@ -53,6 +54,10 @@ onUnmounted(() => {
     detachPullToRefresh();
     detachPullToRefresh = null;
   }
+});
+
+const eventRows = computed(() => {
+  return eventsStore.events.map((event) => ({ event, status: eventStatusBadge(event) }));
 });
 
 function participantNames(event) {
@@ -118,7 +123,7 @@ async function toggleArchived(event) {
       </thead>
       <tbody>
         <tr
-          v-for="event in eventsStore.events"
+          v-for="{ event, status } in eventRows"
           :key="event.id"
           class="events__row"
           tabindex="0"
@@ -145,13 +150,24 @@ async function toggleArchived(event) {
           </td>
           <td data-label="Kezdő dátum" class="money">{{ formatDate(event.startDate) }}</td>
           <td data-label="Állapot">
-            <span v-if="event.archived" class="stamp stamp--muted">Archivált</span>
-            <span v-else class="events__active">Aktív</span>
+            <span class="events__state">
+              <span v-if="status.key === 'active'" class="events__active" :title="status.title">
+                {{ status.label }}
+              </span>
+              <span
+                v-else
+                class="stamp stamp--small"
+                :class="eventStatusStampClass(status)"
+                :title="status.title"
+              >
+                {{ status.label }}
+              </span>
+            </span>
           </td>
           <td data-label="" class="align-right">
             <button
               type="button"
-              class="btn btn--ghost btn--small"
+              class="btn btn--ghost btn--small events__toggle"
               @click.stop="toggleArchived(event)"
             >
               {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
@@ -239,19 +255,26 @@ async function toggleArchived(event) {
   font-size: 0.92rem;
 }
 
+.events__state {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  min-width: 8.75rem;
+  min-height: 1.7rem;
+  white-space: nowrap;
+}
+
+.events__toggle {
+  min-width: 8rem;
+  white-space: nowrap;
+}
+
 .events__active {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--forint);
-}
-
-.stamp--muted {
-  border-color: var(--rule-strong);
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  padding: 0.15em 0.6em;
 }
 
 .btn--small {
@@ -304,6 +327,14 @@ async function toggleArchived(event) {
   .events__table td[data-label='Név'],
   .events__table td[data-label='Résztvevők'] {
     grid-column: 1 / -1;
+  }
+
+  .events__table td[data-label='Állapot'] {
+    grid-column: 1 / -1;
+  }
+
+  .events__state {
+    min-width: 0;
   }
 
   .events__table td[data-label]::before {

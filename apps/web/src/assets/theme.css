@@ -230,6 +230,21 @@ button {
   color: var(--settle);
 }
 
+.stamp--due {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.stamp--muted {
+  border-color: var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.stamp--small {
+  font-size: 0.7rem;
+  padding: 0.15em 0.6em;
+}
+
 .btn {
   font-family: var(--font-body);
   font-weight: 600;

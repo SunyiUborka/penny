@@ -2,12 +2,16 @@ import * as eventRepository from '../repositories/eventRepository.js';
 import * as personRepository from '../repositories/personRepository.js';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as settlementPaymentRepository from '../repositories/settlementPaymentRepository.js';
+import * as settlementService from './settlementService.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 
 export async function listEvents() {
   const events = await eventRepository.listEvents();
-  const totals = await expenseRepository.sumBaseAmountByEvent(events.map((event) => event.id));
-  return events.map((event) => withTotalCost(event, totals));
+  const [totals, progress] = await Promise.all([
+    expenseRepository.sumBaseAmountByEvent(events.map((event) => event.id)),
+    settlementService.getSettlementProgressByEvent(events),
+  ]);
+  return events.map((event) => withSettlement(withTotalCost(event, totals), progress));
 }
 
 /**
@@ -18,8 +22,11 @@ export async function getEvent(id) {
   if (!event) {
     throw new NotFoundError('Nincs ilyen esemény.');
   }
-  const totals = await expenseRepository.sumBaseAmountByEvent([id]);
-  return withTotalCost(event, totals);
+  const [totals, progress] = await Promise.all([
+    expenseRepository.sumBaseAmountByEvent([id]),
+    settlementService.getSettlementProgressByEvent([event]),
+  ]);
+  return withSettlement(withTotalCost(event, totals), progress);
 }
 
 /**
@@ -28,7 +35,7 @@ export async function getEvent(id) {
 export async function createEvent(input) {
   await assertParticipantsExist(input.participantIds);
   const event = await eventRepository.createEvent(input);
-  return withTotalCost(event, new Map());
+  return withSettlement(withTotalCost(event, new Map()), new Map());
 }
 
 /**
@@ -45,8 +52,11 @@ export async function updateEvent(id, input) {
   if (!updated) {
     throw new NotFoundError('Nincs ilyen esemény.');
   }
-  const totals = await expenseRepository.sumBaseAmountByEvent([id]);
-  return withTotalCost(updated, totals);
+  const [totals, progress] = await Promise.all([
+    expenseRepository.sumBaseAmountByEvent([id]),
+    settlementService.getSettlementProgressByEvent([updated]),
+  ]);
+  return withSettlement(withTotalCost(updated, totals), progress);
 }
 
 /**
@@ -55,6 +65,17 @@ export async function updateEvent(id, input) {
  */
 function withTotalCost(event, totals) {
   return { ...event, totalBaseAmountMinor: totals.get(event.id) ?? 0 };
+}
+
+/**
+ * @param {object} event
+ * @param {Map<string, import('@filler/shared').SettlementProgress>} progress
+ */
+function withSettlement(event, progress) {
+  return {
+    ...event,
+    settlement: progress.get(event.id) ?? { status: 'nothing', openBaseAmountMinor: 0 },
+  };
 }
 
 /**
