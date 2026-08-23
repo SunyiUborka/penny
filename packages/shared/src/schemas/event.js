@@ -42,6 +42,12 @@ export const eventResponseSchema = z.object({
   endDate: z.coerce.date().nullable(),
   archived: z.boolean(),
   totalBaseAmountMinor: amountMinorSchema,
+  settlement: z
+    .object({
+      status: z.enum(['nothing', 'open', 'settled', 'unknown']),
+      openBaseAmountMinor: amountMinorSchema,
+    })
+    .optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

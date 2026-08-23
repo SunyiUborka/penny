@@ -127,6 +127,22 @@ export async function findByPersonInvolved(personId) {
 }
 
 /**
+ * @param {string[]} eventIds
+ * @returns {Promise<Map<string, object[]>>} eseményenkénti kiadáslisták
+ */
+export async function listByEventIds(eventIds) {
+  const docs = await ExpenseModel.find({
+    eventId: { $in: eventIds.map((id) => new Types.ObjectId(id)) },
+  }).sort({ date: -1, createdAt: -1 });
+
+  const byEvent = new Map(eventIds.map((id) => [id, []]));
+  for (const doc of docs) {
+    byEvent.get(doc.eventId.toString())?.push(serialize(doc));
+  }
+  return byEvent;
+}
+
+/**
  * Eseményenkénti kiadás-összköltség (alapvalutában), az események
  * listázásához.
  * @param {string[]} eventIds

@@ -25,6 +25,23 @@ export async function listForEvent(eventId) {
 }
 
 /**
+ * @param {string[]} eventIds
+ * @returns {Promise<Map<string, object[]>>} eseményenkénti kiegyenlítés-listák
+ */
+export async function listByEventIds(eventIds) {
+  const docs = await SettlementPaymentModel.find({ eventId: { $in: eventIds } }).sort({
+    date: -1,
+    createdAt: -1,
+  });
+
+  const byEvent = new Map(eventIds.map((id) => [id, []]));
+  for (const doc of docs) {
+    byEvent.get(doc.eventId.toString())?.push(serialize(doc));
+  }
+  return byEvent;
+}
+
+/**
  * @param {string} clientId
  * @returns {Promise<object | null>}
  */

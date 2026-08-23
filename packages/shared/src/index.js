@@ -3,6 +3,7 @@ export * from './currency/convert.js';
 export * from './currency/split.js';
 export * from './currency/format.js';
 export * from './settlement/computeSettlement.js';
+export * from './settlement/settlementProgress.js';
 export * from './schemas/money.js';
 export * from './schemas/settlement.js';
 export * from './schemas/date.js';
