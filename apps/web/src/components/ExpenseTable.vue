@@ -26,6 +26,8 @@ const emit = defineEmits(['refresh']);
 
 const expensesStore = useExpensesStore();
 
+const isArchived = computed(() => props.event.archived === true);
+
 const payerFilter = ref('');
 const showModal = ref(false);
 const editingExpense = ref(null);
@@ -87,12 +89,18 @@ function participantName(id) {
 }
 
 function openCreateModal() {
+  if (isArchived.value) {
+    return;
+  }
   editingExpense.value = null;
   formError.value = '';
   showModal.value = true;
 }
 
 function openEditModal(expense) {
+  if (isArchived.value) {
+    return;
+  }
   if (expense.pending) {
     // Egy még fel nem töltött sor nem szerkeszthető: a szerkesztés a
     // szervertől kapott, valódi kiadás azonosítójára támaszkodik, ami egy
@@ -130,6 +138,9 @@ async function handleSubmit(input, rateMeta) {
 }
 
 async function handleDelete(expense) {
+  if (isArchived.value) {
+    return;
+  }
   const confirmed = window.confirm(`Biztosan törlöd ezt a kiadást: "${expense.description}"?`);
   if (!confirmed) {
     return;
@@ -173,7 +184,12 @@ async function handleDelete(expense) {
         <span class="expense-table__live-dot" aria-hidden="true" />
         {{ expensesStore.connected ? 'élő' : 'nincs kapcsolat' }}
       </p>
-      <button type="button" class="btn btn--primary" @click="openCreateModal">+ Új kiadás</button>
+      <button v-if="!isArchived" type="button" class="btn btn--primary" @click="openCreateModal">
+        + Új kiadás
+      </button>
+      <p v-else class="expense-table__locked">
+        Archivált esemény — a kiadások csak olvashatók, az elszámolás tovább vezethető.
+      </p>
     </div>
 
     <p v-if="actionError" role="alert" class="expense-table__status">{{ actionError }}</p>
@@ -182,7 +198,11 @@ async function handleDelete(expense) {
       Nem sikerült betölteni a kiadásokat.
     </p>
     <p v-else-if="filteredExpenses.length === 0" class="expense-table__status">
-      Még nincs kiadás. Rögzítsd az elsőt a „Új kiadás” gombbal.
+      {{
+        isArchived
+          ? 'Ehhez az archivált eseményhez nincs kiadás.'
+          : 'Még nincs kiadás. Rögzítsd az elsőt a „Új kiadás” gombbal.'
+      }}
     </p>
 
     <table v-else class="ledger-table expense-table__table">
@@ -204,12 +224,15 @@ async function handleDelete(expense) {
             :class="{
               'is-fresh': expensesStore.freshIds.has(expense.id),
               'is-pending': expense.pending,
+              'is-locked': isArchived,
             }"
-            :tabindex="expense.pending ? -1 : 0"
+            :tabindex="expense.pending || isArchived ? -1 : 0"
             :title="
-              expense.pending
-                ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
-                : undefined
+              isArchived
+                ? 'Az esemény archivált: a kiadás nem szerkeszthető és nem törölhető.'
+                : expense.pending
+                  ? 'Egy még fel nem töltött kiadás nem szerkeszthető, amíg fel nem töltődik — a Szinkronizálás képernyőn eldobható.'
+                  : undefined
             "
             @click="openEditModal(expense)"
             @keydown.enter="openEditModal(expense)"
@@ -250,7 +273,7 @@ async function handleDelete(expense) {
                 {{ expense.items.length }} tétel
               </button>
             </td>
-            <td v-if="!expense.pending" data-label="" class="expense-table__actions">
+            <td v-if="!expense.pending && !isArchived" data-label="" class="expense-table__actions">
               <RowMenu label="Kiadás műveletei">
                 <button
                   type="button"
@@ -457,15 +480,22 @@ async function handleDelete(expense) {
 
 /* Egy még fel nem töltött sor nem szerkeszthető (lásd `openEditModal`
    őrfeltétele) — a kurzor és a hover-kiemelés ezt ne ígérje meg. */
-.expense-table__row.is-pending {
+.expense-table__row.is-pending,
+.expense-table__row.is-locked {
   cursor: default;
+}
+
+.expense-table__locked {
+  margin: 0 0 0.55em;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
 }
 
 /* Hover csak igazi kurzorral, és csak nem-pending soron: érintésnél
    beragadna a kiemelés, pending soron pedig egy nem elérhető műveletet
    ígérne. */
 @media (hover: hover) and (pointer: fine) {
-  .expense-table__row:not(.is-pending):hover {
+  .expense-table__row:not(.is-pending):not(.is-locked):hover {
     background: var(--forint-soft);
   }
 }
