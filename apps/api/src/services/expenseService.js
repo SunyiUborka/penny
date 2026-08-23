@@ -30,6 +30,7 @@ export async function createExpense(eventId, input) {
   }
 
   const event = await getEventOrThrow(eventId);
+  assertNotArchived(event);
   assertParticipants(event, input);
   const data = buildExpenseData(input);
 
@@ -88,6 +89,7 @@ export async function updateExpense(id, input) {
     throw new NotFoundError('Nincs ilyen kiadás.');
   }
   const event = await getEventOrThrow(existing.eventId);
+  assertNotArchived(event);
   assertParticipants(event, input);
   const data = buildExpenseData(input);
 
@@ -103,6 +105,13 @@ export async function updateExpense(id, input) {
  * @param {string} id
  */
 export async function deleteExpense(id) {
+  const existing = await expenseRepository.findExpenseById(id);
+  if (!existing) {
+    throw new NotFoundError('Nincs ilyen kiadás.');
+  }
+  const event = await getEventOrThrow(existing.eventId);
+  assertNotArchived(event);
+
   const deleted = await expenseRepository.deleteExpenseById(id);
   if (!deleted) {
     throw new NotFoundError('Nincs ilyen kiadás.');
@@ -119,6 +128,17 @@ async function getEventOrThrow(eventId) {
     throw new NotFoundError('Nincs ilyen esemény.');
   }
   return event;
+}
+
+/**
+ * @param {{ archived?: boolean }} event
+ */
+function assertNotArchived(event) {
+  if (event.archived) {
+    throw new ConflictError(
+      'Az esemény archivált: a kiadásai nem hozhatók létre, nem szerkeszthetők és nem törölhetők.',
+    );
+  }
 }
 
 /**
