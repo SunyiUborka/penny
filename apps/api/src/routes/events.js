@@ -1,4 +1,7 @@
 import {
+  categoryListResponseSchema,
+  categoryResponseSchema,
+  createCategoryBodySchema,
   createEventBodySchema,
   createExpenseBodySchema,
   createSettlementPaymentBodySchema,
@@ -12,6 +15,7 @@ import {
   settlementResponseSchema,
   updateEventBodySchema,
 } from '@filler/shared';
+import * as categoryService from '../services/categoryService.js';
 import * as eventService from '../services/eventService.js';
 import * as expenseService from '../services/expenseService.js';
 import * as settlementService from '../services/settlementService.js';
@@ -69,6 +73,29 @@ export default function eventsRoutes(fastify) {
     await eventService.deleteEvent(request.params.id);
     return reply.status(204).send();
   });
+
+  fastify.get(
+    '/:id/categories',
+    { schema: { params: idParamsSchema, response: { 200: categoryListResponseSchema } } },
+    (request) => {
+      return categoryService.listCategoriesForEvent(request.params.id);
+    },
+  );
+
+  fastify.post(
+    '/:id/categories',
+    {
+      schema: {
+        params: idParamsSchema,
+        body: createCategoryBodySchema,
+        response: { 201: categoryResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const category = await categoryService.createCategory(request.params.id, request.body);
+      return reply.status(201).send(category);
+    },
+  );
 
   fastify.get(
     '/:id/expenses',

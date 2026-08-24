@@ -1,6 +1,7 @@
 import { convertExpenseAmounts, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
+import * as categoryRepository from '../repositories/categoryRepository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 import { publishEventChange } from './eventBus.js';
 import { parseDateOnly } from '../utils/dateOnly.js';
@@ -32,7 +33,8 @@ export async function createExpense(eventId, input) {
   const event = await getEventOrThrow(eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
-  const data = buildExpenseData(input);
+  const categoryIds = await resolveCategoryIds(eventId, input);
+  const data = buildExpenseData({ ...input, categoryIds });
 
   let created;
   try {
@@ -91,7 +93,8 @@ export async function updateExpense(id, input) {
   const event = await getEventOrThrow(existing.eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
-  const data = buildExpenseData(input);
+  const categoryIds = await resolveCategoryIds(existing.eventId, input);
+  const data = buildExpenseData({ ...input, categoryIds });
 
   const updated = await expenseRepository.updateExpense(id, data);
   if (!updated) {
@@ -167,6 +170,31 @@ function assertParticipants(event, input) {
 }
 
 /**
+ * A kiadásra kerülő kategóriák szűrése. Másik esemény kategóriája hiba, egy
+ * már törölt (sehol nem létező) kategória viszont csak lekerül — ugyanaz az
+ * eredmény, amit a kategória törlésének `$pull`-ja is előállít, és enélkül egy
+ * offline sorbanállított kiadás véglegesen elbukna, ha közben törlik a
+ * kategóriáját.
+ * @param {string} eventId
+ * @param {{ categoryIds?: string[] }} input
+ * @returns {Promise<string[] | undefined>}
+ */
+async function resolveCategoryIds(eventId, input) {
+  const { categoryIds } = input;
+  if (!categoryIds || categoryIds.length === 0) {
+    return categoryIds;
+  }
+  const owners = await categoryRepository.findEventIdsByIds(categoryIds);
+  const foreignIds = categoryIds.filter((id) => owners.has(id) && owners.get(id) !== eventId);
+  if (foreignIds.length > 0) {
+    throw new ValidationError('A kategóriák az esemény kategóriái közül kell legyenek.', {
+      categoryIds: foreignIds,
+    });
+  }
+  return categoryIds.filter((id) => owners.has(id));
+}
+
+/**
  * A rögzítendő mezőket építi fel: a pénznem/árfolyam szabályokat kényszeríti
  * ki (2. pont), és kiszámítja a forint-összeget. Az elszámolás mindig
  * forintban történik, eseményenkénti alapvaluta-választás nélkül.
@@ -208,5 +236,6 @@ function buildExpenseData(input) {
     baseAmountMinor,
     items,
     sharedWithIds: input.sharedWithIds,
+    categoryIds: input.categoryIds,
   };
 }
