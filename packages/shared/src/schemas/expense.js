@@ -7,6 +7,7 @@ import {
 } from './money.js';
 import { dateOnlyStringSchema } from './date.js';
 import { getCurrencyExponent, MAX_EXPENSE_MAJOR_AMOUNT } from '../currency/exponents.js';
+import { expenseCategoryIdsSchema } from './category.js';
 
 export const rateSourceEnumSchema = z.enum(['api', 'manual']);
 
@@ -52,6 +53,7 @@ export const createExpenseBodySchema = z
     rateSource: rateSourceEnumSchema,
     rateFetchedAt: z.coerce.date().optional(),
     sharedWithIds: z.array(personIdSchema).min(1, 'Legalább egy osztozó szükséges.'),
+    categoryIds: expenseCategoryIdsSchema.default([]),
     /**
      * Tételes felosztás. A mező ELHAGYÁSA jelenti azt, hogy a kiadás nem
      * tételezett (a mai, egyenlő felosztás a `sharedWithIds` között) — egy
@@ -122,6 +124,7 @@ export const expenseResponseSchema = z.object({
   rateFetchedAt: z.coerce.date(),
   baseAmountMinor: amountMinorSchema,
   sharedWithIds: z.array(personIdSchema),
+  categoryIds: z.array(personIdSchema),
   items: z.array(expenseItemResponseSchema).min(1).optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
