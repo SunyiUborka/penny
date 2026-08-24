@@ -187,9 +187,6 @@ async function handleDelete(expense) {
       <button v-if="!isArchived" type="button" class="btn btn--primary" @click="openCreateModal">
         + Új kiadás
       </button>
-      <p v-else class="expense-table__locked">
-        Archivált esemény — a kiadások csak olvashatók, az elszámolás tovább vezethető.
-      </p>
     </div>
 
     <p v-if="actionError" role="alert" class="expense-table__status">{{ actionError }}</p>
@@ -483,12 +480,6 @@ async function handleDelete(expense) {
 .expense-table__row.is-pending,
 .expense-table__row.is-locked {
   cursor: default;
-}
-
-.expense-table__locked {
-  margin: 0 0 0.55em;
-  font-size: 0.82rem;
-  color: var(--ink-soft);
 }
 
 /* Hover csak igazi kurzorral, és csak nem-pending soron: érintésnél
