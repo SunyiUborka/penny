@@ -65,10 +65,10 @@ export function deleteAllForEvent(eventId) {
 }
 
 /**
- * @param {string} eventId
  * @param {string[]} ids
- * @returns {Promise<number>} hány megadott azonosító tartozik EHHEZ az eseményhez
+ * @returns {Promise<Map<string, string>>} kategória-azonosító → az eseménye
  */
-export function countExistingByEventAndIds(eventId, ids) {
-  return CategoryModel.countDocuments({ eventId, _id: { $in: ids } });
+export async function findEventIdsByIds(ids) {
+  const docs = await CategoryModel.find({ _id: { $in: ids } }).select('eventId');
+  return new Map(docs.map((doc) => [doc._id.toString(), doc.eventId.toString()]));
 }

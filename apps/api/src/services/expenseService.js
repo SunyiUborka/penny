@@ -33,8 +33,8 @@ export async function createExpense(eventId, input) {
   const event = await getEventOrThrow(eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
-  await assertCategories(eventId, input);
-  const data = buildExpenseData(input);
+  const categoryIds = await resolveCategoryIds(eventId, input);
+  const data = buildExpenseData({ ...input, categoryIds });
 
   let created;
   try {
@@ -93,8 +93,8 @@ export async function updateExpense(id, input) {
   const event = await getEventOrThrow(existing.eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
-  await assertCategories(existing.eventId, input);
-  const data = buildExpenseData(input);
+  const categoryIds = await resolveCategoryIds(existing.eventId, input);
+  const data = buildExpenseData({ ...input, categoryIds });
 
   const updated = await expenseRepository.updateExpense(id, data);
   if (!updated) {
@@ -170,20 +170,28 @@ function assertParticipants(event, input) {
 }
 
 /**
+ * A kiadásra kerülő kategóriák szűrése. Másik esemény kategóriája hiba, egy
+ * már törölt (sehol nem létező) kategória viszont csak lekerül — ugyanaz az
+ * eredmény, amit a kategória törlésének `$pull`-ja is előállít, és enélkül egy
+ * offline sorbanállított kiadás véglegesen elbukna, ha közben törlik a
+ * kategóriáját.
  * @param {string} eventId
  * @param {{ categoryIds?: string[] }} input
+ * @returns {Promise<string[] | undefined>}
  */
-async function assertCategories(eventId, input) {
-  const categoryIds = input.categoryIds ?? [];
-  if (categoryIds.length === 0) {
-    return;
+async function resolveCategoryIds(eventId, input) {
+  const { categoryIds } = input;
+  if (!categoryIds || categoryIds.length === 0) {
+    return categoryIds;
   }
-  const existing = await categoryRepository.countExistingByEventAndIds(eventId, categoryIds);
-  if (existing !== categoryIds.length) {
+  const owners = await categoryRepository.findEventIdsByIds(categoryIds);
+  const foreignIds = categoryIds.filter((id) => owners.has(id) && owners.get(id) !== eventId);
+  if (foreignIds.length > 0) {
     throw new ValidationError('A kategóriák az esemény kategóriái közül kell legyenek.', {
-      categoryIds,
+      categoryIds: foreignIds,
     });
   }
+  return categoryIds.filter((id) => owners.has(id));
 }
 
 /**
@@ -228,6 +236,6 @@ function buildExpenseData(input) {
     baseAmountMinor,
     items,
     sharedWithIds: input.sharedWithIds,
-    categoryIds: input.categoryIds ?? [],
+    categoryIds: input.categoryIds,
   };
 }

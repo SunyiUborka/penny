@@ -53,7 +53,7 @@ export const createExpenseBodySchema = z
     rateSource: rateSourceEnumSchema,
     rateFetchedAt: z.coerce.date().optional(),
     sharedWithIds: z.array(personIdSchema).min(1, 'Legalább egy osztozó szükséges.'),
-    categoryIds: expenseCategoryIdsSchema.default([]),
+    categoryIds: expenseCategoryIdsSchema.optional(),
     /**
      * Tételes felosztás. A mező ELHAGYÁSA jelenti azt, hogy a kiadás nem
      * tételezett (a mai, egyenlő felosztás a `sharedWithIds` között) — egy
