@@ -256,6 +256,12 @@ async function handleEdit(input) {
   }
 }
 
+async function toggleArchived() {
+  event.value = await eventsStore.updateEvent(event.value.id, {
+    archived: !event.value.archived,
+  });
+}
+
 async function handleDelete() {
   const confirmed = window.confirm(
     'Biztosan törlöd az eseményt, minden kiadását és kiegyenlítését?',
@@ -305,6 +311,9 @@ async function handleDelete() {
               </button>
               <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
                 Szerkesztés
+              </button>
+              <button type="button" class="btn btn--ghost btn--small" @click="toggleArchived">
+                {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
               </button>
               <button type="button" class="btn btn--danger btn--small" @click="handleDelete">
                 Törlés
