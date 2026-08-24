@@ -18,6 +18,7 @@ import {
   settlementPaymentsCacheKey,
 } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
+import RowMenu from '../components/RowMenu.vue';
 import CategoryManagerModal from '../components/CategoryManagerModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
@@ -294,19 +295,21 @@ async function handleDelete() {
             </span>
           </div>
           <div class="event-detail__actions">
-            <button
-              type="button"
-              class="btn btn--ghost btn--small"
-              @click="showCategoryModal = true"
-            >
-              Kategóriák
-            </button>
-            <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
-              Szerkesztés
-            </button>
-            <button type="button" class="btn btn--danger btn--small" @click="handleDelete">
-              Törlés
-            </button>
+            <RowMenu label="Esemény műveletei">
+              <button
+                type="button"
+                class="btn btn--ghost btn--small"
+                @click="showCategoryModal = true"
+              >
+                Kategóriák
+              </button>
+              <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
+                Szerkesztés
+              </button>
+              <button type="button" class="btn btn--danger btn--small" @click="handleDelete">
+                Törlés
+              </button>
+            </RowMenu>
           </div>
         </div>
       </header>

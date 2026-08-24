@@ -7,6 +7,7 @@ import { usePeopleStore } from '../stores/people.js';
 import { useOfflineStore } from '../stores/offline.js';
 import { EVENTS_CACHE_KEY, PEOPLE_CACHE_KEY } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
+import RowMenu from '../components/RowMenu.vue';
 import { formatDate } from '../utils/format.js';
 import { eventStatusBadge, eventStatusStampClass } from '../utils/eventStatus.js';
 import { isNativeApp } from '../utils/platform.js';
@@ -17,7 +18,8 @@ const eventsStore = useEventsStore();
 const peopleStore = usePeopleStore();
 const offlineStore = useOfflineStore();
 
-const showCreateModal = ref(false);
+const showFormModal = ref(false);
+const editingEvent = ref(null);
 const saving = ref(false);
 const formError = ref('');
 
@@ -68,17 +70,43 @@ function openEvent(event) {
   router.push(`/events/${event.id}`);
 }
 
-async function handleCreate(input) {
+function openCreate() {
+  editingEvent.value = null;
+  formError.value = '';
+  showFormModal.value = true;
+}
+
+function openEdit(event) {
+  editingEvent.value = event;
+  formError.value = '';
+  showFormModal.value = true;
+}
+
+async function handleSubmit(input) {
   saving.value = true;
   formError.value = '';
   try {
-    await eventsStore.createEvent(input);
-    showCreateModal.value = false;
+    if (editingEvent.value) {
+      await eventsStore.updateEvent(editingEvent.value.id, input);
+    } else {
+      await eventsStore.createEvent(input);
+    }
+    showFormModal.value = false;
   } catch (error) {
-    formError.value = error.message ?? 'Nem sikerült létrehozni az eseményt.';
+    formError.value = error.message ?? 'Nem sikerült menteni az eseményt.';
   } finally {
     saving.value = false;
   }
+}
+
+async function handleDelete(event) {
+  const confirmed = window.confirm(
+    `Biztosan törlöd a(z) „${event.name}” eseményt, minden kiadásával és kiegyenlítésével?`,
+  );
+  if (!confirmed) {
+    return;
+  }
+  await eventsStore.deleteEvent(event.id);
 }
 
 async function toggleArchived(event) {
@@ -93,9 +121,7 @@ async function toggleArchived(event) {
         <span class="eyebrow">Fillér</span>
         <h1>Események</h1>
       </div>
-      <button type="button" class="btn btn--primary" @click="showCreateModal = true">
-        + Új esemény
-      </button>
+      <button type="button" class="btn btn--primary" @click="openCreate">+ Új esemény</button>
     </div>
 
     <p v-if="pullRatio > 0" class="events__pull" :style="{ opacity: pullRatio }">
@@ -164,26 +190,35 @@ async function toggleArchived(event) {
               </span>
             </span>
           </td>
-          <td data-label="" class="align-right">
-            <button
-              type="button"
-              class="btn btn--ghost btn--small events__toggle"
-              @click.stop="toggleArchived(event)"
-            >
-              {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
-            </button>
+          <td data-label="" class="align-right events__actions">
+            <RowMenu label="Esemény műveletei">
+              <button type="button" class="btn btn--ghost btn--small" @click="openEdit(event)">
+                Szerkesztés
+              </button>
+              <button
+                type="button"
+                class="btn btn--ghost btn--small"
+                @click="toggleArchived(event)"
+              >
+                {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
+              </button>
+              <button type="button" class="btn btn--danger btn--small" @click="handleDelete(event)">
+                Törlés
+              </button>
+            </RowMenu>
           </td>
         </tr>
       </tbody>
     </table>
 
     <EventFormModal
-      v-if="showCreateModal"
+      v-if="showFormModal"
+      :event="editingEvent"
       :people="peopleStore.people"
       :saving="saving"
       :error-message="formError"
-      @submit="handleCreate"
-      @cancel="showCreateModal = false"
+      @submit="handleSubmit"
+      @cancel="showFormModal = false"
     />
   </main>
 </template>
@@ -264,9 +299,9 @@ async function toggleArchived(event) {
   white-space: nowrap;
 }
 
-.events__toggle {
-  min-width: 8rem;
-  white-space: nowrap;
+.events__actions {
+  text-align: right;
+  width: 1%;
 }
 
 .events__active {
