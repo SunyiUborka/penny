@@ -1,4 +1,8 @@
 const dateFormatter = new Intl.DateTimeFormat('hu-HU', { dateStyle: 'medium' });
+const dateWithoutYearFormatter = new Intl.DateTimeFormat('hu-HU', {
+  month: '2-digit',
+  day: '2-digit',
+});
 
 /**
  * @param {string | Date | null | undefined} value
@@ -9,6 +13,17 @@ export function formatDate(value) {
     return '—';
   }
   return dateFormatter.format(new Date(value));
+}
+
+/**
+ * @param {string | Date | null | undefined} value
+ * @returns {string}
+ */
+export function formatDateWithoutYear(value) {
+  if (!value) {
+    return '—';
+  }
+  return dateWithoutYearFormatter.format(new Date(value));
 }
 
 /**

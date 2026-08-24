@@ -313,6 +313,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
   mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
 }
 
+.cat-picker__values > * {
+  flex: 0 0 auto;
+}
+
 .cat-picker__values::-webkit-scrollbar {
   display: none;
 }

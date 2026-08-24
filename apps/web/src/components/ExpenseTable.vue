@@ -6,7 +6,7 @@ import CategoryTag from './CategoryTag.vue';
 import { useCategoriesStore } from '../stores/categories.js';
 import ExpenseModal from './ExpenseModal.vue';
 import RowMenu from './RowMenu.vue';
-import { formatDate } from '../utils/format.js';
+import { formatDate, formatDateWithoutYear } from '../utils/format.js';
 import { isNativeApp } from '../utils/platform.js';
 import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
@@ -241,7 +241,9 @@ async function handleDelete(expense) {
             @click="openEditModal(expense)"
             @keydown.enter="openEditModal(expense)"
           >
-            <td data-label="Dátum" class="money">{{ formatDate(expense.date) }}</td>
+            <td data-label="Dátum" class="money" :title="formatDate(expense.date)">
+              {{ formatDateWithoutYear(expense.date) }}
+            </td>
             <td data-label="Leírás" class="expense-table__description">
               {{ expense.description }}
               <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
@@ -460,8 +462,16 @@ async function handleDelete(expense) {
   mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
 }
 
+.expense-table__cat-scroll > * {
+  flex: 0 0 auto;
+}
+
 .expense-table__cat-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.expense-table__table th:nth-child(2) {
+  min-width: 13rem;
 }
 
 .expense-table__shared {
