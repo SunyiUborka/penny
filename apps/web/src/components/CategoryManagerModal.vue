@@ -170,6 +170,10 @@ async function create() {
 </template>
 
 <style scoped>
+.modal {
+  width: min(560px, 100%);
+}
+
 .category-manager__list {
   list-style: none;
   margin: 0 0 var(--space-4);
