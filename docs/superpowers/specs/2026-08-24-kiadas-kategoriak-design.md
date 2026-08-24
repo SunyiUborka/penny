@@ -50,11 +50,11 @@ elszámolás matematikáját nem érinti.
 
 A rendszerben ma három formanyelv van, mindegyiknek van gazdája:
 
-| forma | betűtípus | jelentés |
-| --- | --- | --- |
-| lekerekített pill (`.participant-chip`) | sans | ember |
-| ferde, nagybetűs pecsét (`.stamp`) | serif | állapot, verdikt |
-| tabuláris szám (`.money`) | mono | a könyv adata |
+| forma                                   | betűtípus | jelentés         |
+| --------------------------------------- | --------- | ---------------- |
+| lekerekített pill (`.participant-chip`) | sans      | ember            |
+| ferde, nagybetűs pecsét (`.stamp`)      | serif     | állapot, verdikt |
+| tabuláris szám (`.money`)               | mono      | a könyv adata    |
 
 A kategória egyik sem: pillként embernek, pecsétként állapotnak olvasnánk.
 Ezért kap egy negyedik formát, a **rovatjegyet** — szögletes bal él egy 3 px-es
@@ -71,14 +71,14 @@ tintacsíkként a szín pusztán megkülönböztet.
 
 Hat tintaszín, egyik sem téveszthető össze a három jelentéshordozóval:
 
-| kulcs | világos | sötét |
-| --- | --- | --- |
+| kulcs    | világos   | sötét     |
+| -------- | --------- | --------- |
 | `indigo` | `#3b4d7a` | `#8fa3d4` |
-| `plum` | `#6d3f66` | `#c294bb` |
-| `teal` | `#2c6a6b` | `#7bc0c1` |
-| `rust` | `#9c5626` | `#d69a6e` |
-| `olive` | `#5c6b30` | `#a8bd72` |
-| `slate` | `#4c5a64` | `#9fb0bb` |
+| `plum`   | `#6d3f66` | `#c294bb` |
+| `teal`   | `#2c6a6b` | `#7bc0c1` |
+| `rust`   | `#9c5626` | `#d69a6e` |
+| `olive`  | `#5c6b30` | `#a8bd72` |
+| `slate`  | `#4c5a64` | `#9fb0bb` |
 
 Az adatbázisba a **kulcs** kerül, nem a hex. Így a sötét mód saját árnyalatot
 rendelhet ugyanahhoz a kategóriához, és a paletta később hangolható
@@ -101,7 +101,7 @@ címkén, hover-animáció. Egy 11 px-es címkén ezek zajok.
 
 - `strict: 'throw'`, `timestamps: true` — mint minden modell a projektben.
 - Index: `{ eventId: 1, name: 1 }`, `unique`, `collation: { locale: 'hu',
-  strength: 1 }`. A `strength: 1` az ékezetet és a kisbetűt is egybemossa,
+strength: 1 }`. A `strength: 1` az ékezetet és a kisbetűt is egybemossa,
   tehát „Étel" és „etel" ütközik. Ez szándékos: két ilyen kategória egymás
   mellett használhatatlan lenne. A `personModel` `strength: 2`-t használ
   (kisbetű igen, ékezet nem) — az eltérés tudatos: két ember tényleg
