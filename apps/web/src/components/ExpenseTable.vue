@@ -246,13 +246,15 @@ async function handleDelete(expense) {
               {{ expense.description }}
               <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
               <span class="expense-table__categories">
-                <CategoryTag
-                  v-for="category in categoriesOf(expense)"
-                  :key="category.id"
-                  :name="category.name"
-                  :color="category.color"
-                  small
-                />
+                <span class="expense-table__cat-scroll">
+                  <CategoryTag
+                    v-for="category in categoriesOf(expense)"
+                    :key="category.id"
+                    :name="category.name"
+                    :color="category.color"
+                    small
+                  />
+                </span>
               </span>
             </td>
             <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
@@ -437,12 +439,19 @@ async function handleDelete(expense) {
 }
 
 .expense-table__categories {
+  position: relative;
+  display: block;
+  height: 1.15rem;
+  margin-top: var(--space-1);
+}
+
+.expense-table__cat-scroll {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: var(--space-1);
-  height: 1.15rem;
-  margin-top: var(--space-1);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -451,7 +460,7 @@ async function handleDelete(expense) {
   mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
 }
 
-.expense-table__categories::-webkit-scrollbar {
+.expense-table__cat-scroll::-webkit-scrollbar {
   display: none;
 }
 
