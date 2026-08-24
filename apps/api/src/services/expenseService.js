@@ -1,6 +1,7 @@
 import { convertExpenseAmounts, SETTLEMENT_CURRENCY } from '@filler/shared';
 import * as expenseRepository from '../repositories/expenseRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
+import * as categoryRepository from '../repositories/categoryRepository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 import { publishEventChange } from './eventBus.js';
 import { parseDateOnly } from '../utils/dateOnly.js';
@@ -32,6 +33,7 @@ export async function createExpense(eventId, input) {
   const event = await getEventOrThrow(eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
+  await assertCategories(eventId, input);
   const data = buildExpenseData(input);
 
   let created;
@@ -91,6 +93,7 @@ export async function updateExpense(id, input) {
   const event = await getEventOrThrow(existing.eventId);
   assertNotArchived(event);
   assertParticipants(event, input);
+  await assertCategories(existing.eventId, input);
   const data = buildExpenseData(input);
 
   const updated = await expenseRepository.updateExpense(id, data);
@@ -167,6 +170,23 @@ function assertParticipants(event, input) {
 }
 
 /**
+ * @param {string} eventId
+ * @param {{ categoryIds?: string[] }} input
+ */
+async function assertCategories(eventId, input) {
+  const categoryIds = input.categoryIds ?? [];
+  if (categoryIds.length === 0) {
+    return;
+  }
+  const existing = await categoryRepository.countExistingByEventAndIds(eventId, categoryIds);
+  if (existing !== categoryIds.length) {
+    throw new ValidationError('A kategóriák az esemény kategóriái közül kell legyenek.', {
+      categoryIds,
+    });
+  }
+}
+
+/**
  * A rögzítendő mezőket építi fel: a pénznem/árfolyam szabályokat kényszeríti
  * ki (2. pont), és kiszámítja a forint-összeget. Az elszámolás mindig
  * forintban történik, eseményenkénti alapvaluta-választás nélkül.
@@ -208,5 +228,6 @@ function buildExpenseData(input) {
     baseAmountMinor,
     items,
     sharedWithIds: input.sharedWithIds,
+    categoryIds: input.categoryIds ?? [],
   };
 }
