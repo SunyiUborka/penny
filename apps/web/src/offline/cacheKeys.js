@@ -44,3 +44,13 @@ export function expensesCacheKey(eventId) {
 export function settlementPaymentsCacheKey(eventId) {
   return `settlement-payments:${eventId}`;
 }
+
+/**
+ * Egy esemény kategórialistájának kulcsa. Külön kulcs a kiadásokétól: két
+ * külön kérés, és offline egyikük megléte nem jelenti a másikét.
+ * @param {string} eventId
+ * @returns {string}
+ */
+export function categoriesCacheKey(eventId) {
+  return `categories:${eventId}`;
+}
