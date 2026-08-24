@@ -88,7 +88,7 @@ a backend `node --watch`-csal indul, mindkettő bind mountolt forráskönyvtárr
 
 ## 4. Adatmodell
 
-Öt Mongo kollekció, mindegyik `strict: 'throw'` módban (séman kívüli mező
+Hat Mongo kollekció, mindegyik `strict: 'throw'` módban (séman kívüli mező
 írása hibát dob, nem hallgatva eldobja).
 
 ```mermaid
@@ -120,6 +120,13 @@ erDiagram
         number baseAmountMinor "HUF-ra átváltva, mindig ez alapján számol az elszámolás"
         ObjectId[] sharedWithIds "min 1"
         object[] items "opcionális tételek: description?, amountMinor, baseAmountMinor, sharedWithIds"
+        ObjectId[] categoryIds "legfeljebb 10, duplikátum nélkül"
+    }
+    Category {
+        ObjectId _id
+        ObjectId eventId
+        string name "eseményen belül egyedi, case-insensitive"
+        string color "indigo | plum | teal | rust | olive | slate"
     }
     SettlementPayment {
         ObjectId _id
@@ -144,6 +151,7 @@ erDiagram
     }
     Event ||--o{ Expense : "tartalmazza"
     Event ||--o{ SettlementPayment : "tartalmazza"
+    Event ||--o{ Category : "tartalmazza"
     Person ||--o{ Event : "résztvevője"
     Person ||--o{ Expense : "fizetője / osztozója"
     Person ||--o{ SettlementPayment : "fizetője / kedvezményezettje"
@@ -599,7 +607,7 @@ külső broker nélkül: egyetlen `api` konténer fut, így nincs mit
 szinkronizálni példányok között. Ha ez megváltozik, ennek a modulnak a
 belsejét kell kicserélni, a felületét nem.
 
-Üzenettípusok — mindhárom a `expenseStreamMessageSchema` (shared) szerint
+Üzenettípusok — mindegyik az `eventStreamMessageSchema` (shared) szerint
 validálva **kimenetkor és bejövetkor is**, ahogy a rendes HTTP határátlépések:
 `expense.created`, `expense.updated` (a teljes kiadással), `expense.deleted`
 (csak az azonosítóval). Valamint a kategóriákat: `category.created`,
@@ -694,7 +702,7 @@ egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázi
   `offline/rates.js` képzi, azokat a sáv nem követi) — a store-ok és a
   nézetek is innen kérik, mert mindkét oldal ugyanezekre a kulcsokra
   hivatkozik (lásd 10.1, „mit követ a sáv”). A kategória-**írás** szándékosan
-  nem jár az outboxon: offline a kategórialisták csak olvasható.
+  nem jár az outboxon: offline a kategórialisták csak olvashatók.
 - **`outbox`**: a még fel nem töltött kiadás-módosítások, `pending`/`failed`
   státusszal.
 
