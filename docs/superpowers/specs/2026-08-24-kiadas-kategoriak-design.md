@@ -106,11 +106,11 @@ címkén, hover-animáció. Egy 11 px-es címkén ezek zajok.
   mellett használhatatlan lenne. A `personModel` `strength: 2`-t használ
   (kisbetű igen, ékezet nem) — az eltérés tudatos: két ember tényleg
   hívható Andrásnak és Andrasnak, két rovat nem.
-- Index: `{ eventId: 1 }` a listázáshoz, **külön**. A fenti összetett index
-  prefixe elvben fedné, de egy collation-nel létrehozott indexet a MongoDB
-  csak azonos collation-t megadó lekérdezéshez használ — a sima
-  `find({ eventId })` nem ilyen, tehát collation nélküli indexre van
-  szüksége.
+- Index: `{ eventId: 1 }`, **külön**. A listázás megadja a collationt (név
+  szerint rendez vele), tehát az a fenti összetett indexet használja — a
+  collation nélküli lekérdezések (`deleteMany({ eventId })` az esemény
+  törlésekor) viszont nem tudják, mert a MongoDB egy collation-nel
+  létrehozott indexet csak azonos collationt megadó művelethez használ.
 
 A kiadás új mezője:
 
@@ -174,7 +174,12 @@ kategória marad, ami újra törölhető — ártalmatlan. Fordított sorrendben
 kiadásokon egy már nem létező kategóriára mutató id maradna, amit semmi nem
 takarítana el.
 
-Ez tudatosan **eltér** a személytörléstől, ami `ConflictError`-ral tiltja a
+Az **esemény** törlése a kategóriáit is elviszi
+(`categoryRepository.deleteAllForEvent`), ugyanott, ahol ma a kiadásokat és a
+kiegyenlítéseket takarítja az `eventService.deleteEvent` — enélkül a törölt
+esemény kategóriái bent maradnának a kollekcióban.
+
+A kategória törlése tudatosan **eltér** a személytörléstől, ami `ConflictError`-ral tiltja a
 használatban lévő rekord törlését. A különbség oka: a személy törlése
 adatvesztéssel járna (kinek mennyi az egyenlege), a kategóriáé csak
 címkevesztéssel. A felhasználót a felület tájékoztatja a súlyról a
