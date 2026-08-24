@@ -909,9 +909,19 @@ Expected: **400**, üzenet: `A kategóriák az esemény kategóriái közül kel
 
 - [ ] **Step 6: Ellenőrizd a régi kiadásokat**
 
-Run: `curl -s -o /dev/null -w '%{http_code}\n' --cookie "<session cookie>" http://localhost:5173/api/events/$EV_A/expenses`
+Ugyanabból a böngészőkonzolból (a session cookie így megy át), egy olyan eseményen, aminek **a funkció előtt** felvitt kiadásai vannak:
 
-Expected: `200`. Ez azt bizonyítja, hogy a funkció előtt létrehozott, `categoryIds` nélküli dokumentumok is átmennek a válaszsémán (a repository `?? []`-je miatt).
+```js
+const r = await fetch(`/api/events/${EV_A}/expenses`, { credentials: 'include' });
+const list = await r.json();
+console.log(
+  r.status,
+  list.length,
+  list.map((e) => e.categoryIds),
+);
+```
+
+Expected: státusz `200`, és minden régi kiadás `categoryIds`-e `[]`. Ez azt bizonyítja, hogy a funkció előtt létrehozott, a mezőt fizikailag nem tartalmazó dokumentumok is átmennek a válaszsémán (a repository `?? []`-je miatt) — a Mongoose a `default`-ot csak íráskor alkalmazza.
 
 - [ ] **Step 7: Lint, formázás, commit**
 
@@ -1491,6 +1501,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       class="cat-picker__control"
       :class="{ 'is-open': open, 'is-disabled': disabled }"
       role="combobox"
+      aria-label="Kategória"
       :aria-expanded="open"
       aria-haspopup="listbox"
       aria-controls="cat-picker-list"
@@ -1702,12 +1713,13 @@ git commit -m "feat(web): kategória-választó inline felvitellel"
 **Files:**
 
 - Modify: `apps/web/src/components/ExpenseModal.vue`
-- Modify: `apps/web/src/components/ExpenseTable.vue`
 
 **Interfaces:**
 
 - Consumes: `CategoryPicker` (Task 7).
 - Produces: a modal `submit` eseményének payloadja mostantól tartalmaz `categoryIds: string[]`-et.
+
+A kategórialista **betöltése** még nem ebben a taskban történik (az `EventDetailView` Task 10-ben hívja a `fetchCategories`-t), tehát itt a lenyíló üresen nyílik, és csak az „+ Új kategória" sor működik. Ez a helyes köztes állapot — a létrehozott kategória a store-ba kerül, tehát a lenti ellenőrzés végigmegy.
 
 - [ ] **Step 1: Vedd fel az importot és az állapotot**
 
@@ -1774,18 +1786,13 @@ A sablonban cseréld le a Leírás `.field` blokkját (`<div class="field">` …
             />
           </div>
           <div class="field expense-modal__categories">
-            <label id="expense-categories-label">Kategória</label>
-            <CategoryPicker
-              v-model="categoryIds"
-              :event-id="event.id"
-              :disabled="saving"
-              aria-labelledby="expense-categories-label"
-            />
+            <label>Kategória</label>
+            <CategoryPicker v-model="categoryIds" :event-id="event.id" :disabled="saving" />
           </div>
         </div>
 ```
 
-A `<label>`-nek nincs `for`-ja, mert a választó nem egyetlen `<input>`: a kapcsolatot az `aria-labelledby` adja.
+A `<label>` itt pusztán vizuális (nincs `for`-ja, mert a választó nem egyetlen `<input>`), a hozzáférhető nevet a `CategoryPicker` saját `aria-label="Kategória"`-ja adja a `role="combobox"` elemen. **Ne** `aria-labelledby`-t adj a komponensnek: a Vue az ismeretlen attribútumot a gyökér `<div class="cat-picker">`-re örökíti, nem a comboboxra, tehát a vezérlő névtelen maradna.
 
 - [ ] **Step 6: Add meg a törési pontot**
 
@@ -1800,23 +1807,7 @@ A komponens `<style scoped>` blokkjába:
 
 A `.modal__row .field` szabályon `min-width: 0` van, ami sosem törne sorba — enélkül a két mező telefonon összepréselődne egymás mellett.
 
-- [ ] **Step 7: Töltsd be a kategóriákat a kiadástáblából is**
-
-`apps/web/src/components/ExpenseTable.vue` — a `<script setup>` importjai közé:
-
-```js
-import { useCategoriesStore } from '../stores/categories.js';
-```
-
-és a store-példányok közé:
-
-```js
-const categoriesStore = useCategoriesStore();
-```
-
-Ez a példány itt még csak azért kell, hogy a következő taskban a címkéket ki tudjuk írni; a **betöltés** az `EventDetailView`-ban lesz (Task 10). Ha ez a task önmagában kerül ellenőrzésre, a lenyíló üres listát mutat, és az „+ Új kategória" sor működik — ez a helyes köztes állapot.
-
-- [ ] **Step 8: Ellenőrizd kézzel**
+- [ ] **Step 7: Ellenőrizd kézzel**
 
 Run: `npm run dev`
 
@@ -1832,14 +1823,14 @@ A dev stackben, egy nem archivált esemény Kiadások fülén:
 8. Nyisd meg a most mentett kiadást szerkesztésre. Expected: a kategória-mező a mentett címkével jön be.
 9. Szűkítsd a böngészőablakot 480 px alá. Expected: a Leírás és a Kategória egymás alá kerül.
 
-- [ ] **Step 9: Lint, formázás, build, commit**
+- [ ] **Step 8: Lint, formázás, build, commit**
 
 Run: `npm run lint`
 Run: `npm run format:check`
 Run: `npm run build`
 
 ```bash
-git add apps/web/src/components/ExpenseModal.vue apps/web/src/components/ExpenseTable.vue
+git add apps/web/src/components/ExpenseModal.vue
 git commit -m "feat(web): kategória-választó a kiadás-modalban"
 ```
 
@@ -1853,14 +1844,21 @@ git commit -m "feat(web): kategória-választó a kiadás-modalban"
 
 **Interfaces:**
 
-- Consumes: `CategoryTag` (Task 5), `useCategoriesStore` (Task 6, a példány már ott van a Task 8 óta).
+- Consumes: `CategoryTag` (Task 5), `useCategoriesStore` (Task 6).
 
-- [ ] **Step 1: Vedd fel az importot**
+- [ ] **Step 1: Vedd fel az importokat és a store-példányt**
 
 `apps/web/src/components/ExpenseTable.vue` — az importok közé:
 
 ```js
 import CategoryTag from './CategoryTag.vue';
+import { useCategoriesStore } from '../stores/categories.js';
+```
+
+és a többi store-példány mellé:
+
+```js
+const categoriesStore = useCategoriesStore();
 ```
 
 - [ ] **Step 2: Írd meg a feloldó segédfüggvényt**
