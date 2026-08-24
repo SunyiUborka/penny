@@ -22,6 +22,12 @@
   --settle-soft: #f0e8d6;
   --rule: #cdcbba;
   --rule-strong: #9c9a87;
+  --cat-indigo: #3b4d7a;
+  --cat-plum: #6d3f66;
+  --cat-teal: #2c6a6b;
+  --cat-rust: #9c5626;
+  --cat-olive: #5c6b30;
+  --cat-slate: #4c5a64;
 
   --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   --font-body:
@@ -52,6 +58,12 @@
     --settle-soft: #35301f;
     --rule: #3c473e;
     --rule-strong: #57634f;
+    --cat-indigo: #8fa3d4;
+    --cat-plum: #c294bb;
+    --cat-teal: #7bc0c1;
+    --cat-rust: #d69a6e;
+    --cat-olive: #a8bd72;
+    --cat-slate: #9fb0bb;
   }
 }
 
@@ -69,6 +81,12 @@
   --settle-soft: #f0e8d6;
   --rule: #cdcbba;
   --rule-strong: #9c9a87;
+  --cat-indigo: #3b4d7a;
+  --cat-plum: #6d3f66;
+  --cat-teal: #2c6a6b;
+  --cat-rust: #9c5626;
+  --cat-olive: #5c6b30;
+  --cat-slate: #4c5a64;
 }
 
 :root[data-theme='dark'] {
@@ -85,6 +103,12 @@
   --settle-soft: #35301f;
   --rule: #3c473e;
   --rule-strong: #57634f;
+  --cat-indigo: #8fa3d4;
+  --cat-plum: #c294bb;
+  --cat-teal: #7bc0c1;
+  --cat-rust: #d69a6e;
+  --cat-olive: #a8bd72;
+  --cat-slate: #9fb0bb;
 }
 
 * {
@@ -243,6 +267,41 @@ button {
 .stamp--small {
   font-size: 0.7rem;
   padding: 0.15em 0.6em;
+}
+
+/* Rovatjegy: a kategória formája. Se pill (az az ember), se pecsét (az az
+   állapot) — szögletes bal él egy színes tintacsíkkal, mint egy
+   iratrendezőbe ragasztott indexfül. Mono felirat, mert a pénztárkönyvben a
+   rovat épp olyan gépi adat, mint az összeg. A szín KIZÁRÓLAG a csíkban él:
+   kitöltésként összeütközne a rendszer jelentéshordozó színeivel (zöld =
+   kiadás, vörös = tartozás, réz = kiegyenlítés). */
+.cat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  max-width: 12rem;
+  padding: 0.2em 0.55em;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cat-color, var(--rule-strong));
+  border-radius: 0 3px 3px 0;
+  background: var(--paper-raised);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.cat-tag__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-tag--sm {
+  font-size: 0.64rem;
+  padding: 0.1em 0.45em;
+  max-width: 9rem;
 }
 
 .btn {

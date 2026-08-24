@@ -1,3 +1,4 @@
+import * as categoryRepository from '../repositories/categoryRepository.js';
 import * as eventRepository from '../repositories/eventRepository.js';
 import * as personRepository from '../repositories/personRepository.js';
 import * as expenseRepository from '../repositories/expenseRepository.js';
@@ -91,6 +92,7 @@ export async function deleteEvent(id) {
   // szelvényei bent maradnának a kollekcióban, és a személytörlés
   // védőkorlátja egy már nem létező eseményre hivatkozva blokkolna örökre.
   await settlementPaymentRepository.deleteAllForEvent(id);
+  await categoryRepository.deleteAllForEvent(id);
 }
 
 /**

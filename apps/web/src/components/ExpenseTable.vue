@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { formatMoney, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { useExpensesStore } from '../stores/expenses.js';
+import CategoryTag from './CategoryTag.vue';
+import { useCategoriesStore } from '../stores/categories.js';
 import ExpenseModal from './ExpenseModal.vue';
 import RowMenu from './RowMenu.vue';
 import { formatDate } from '../utils/format.js';
@@ -25,6 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['refresh']);
 
 const expensesStore = useExpensesStore();
+const categoriesStore = useCategoriesStore();
 
 const isArchived = computed(() => props.event.archived === true);
 
@@ -52,6 +55,10 @@ function toggleItems(expenseId) {
     next.add(expenseId);
   }
   expandedIds.value = next;
+}
+
+function categoriesOf(expense) {
+  return (expense.categoryIds ?? []).map((id) => categoriesStore.byId(id)).filter(Boolean);
 }
 
 onMounted(() => {
@@ -238,6 +245,15 @@ async function handleDelete(expense) {
             <td data-label="Leírás" class="expense-table__description">
               {{ expense.description }}
               <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
+              <span v-if="categoriesOf(expense).length" class="expense-table__categories">
+                <CategoryTag
+                  v-for="category in categoriesOf(expense)"
+                  :key="category.id"
+                  :name="category.name"
+                  :color="category.color"
+                  small
+                />
+              </span>
             </td>
             <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
             <td data-label="Összeg" class="align-right money">
@@ -418,6 +434,13 @@ async function handleDelete(expense) {
   letter-spacing: 0.04em;
   background: var(--brass);
   color: var(--paper);
+}
+
+.expense-table__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
 }
 
 .expense-table__shared {

@@ -9,13 +9,16 @@ import { usePeopleStore } from '../stores/people.js';
 import { useExpensesStore } from '../stores/expenses.js';
 import { useSettlementPaymentsStore } from '../stores/settlementPayments.js';
 import { useOfflineStore } from '../stores/offline.js';
+import { useCategoriesStore } from '../stores/categories.js';
 import {
+  categoriesCacheKey,
   eventCacheKey,
   expensesCacheKey,
   PEOPLE_CACHE_KEY,
   settlementPaymentsCacheKey,
 } from '../offline/cacheKeys.js';
 import EventFormModal from '../components/EventFormModal.vue';
+import CategoryManagerModal from '../components/CategoryManagerModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
 import { formatDate } from '../utils/format.js';
@@ -29,6 +32,7 @@ const peopleStore = usePeopleStore();
 const expensesStore = useExpensesStore();
 const paymentsStore = useSettlementPaymentsStore();
 const offlineStore = useOfflineStore();
+const categoriesStore = useCategoriesStore();
 
 const event = ref(null);
 const loading = ref(true);
@@ -48,6 +52,7 @@ function selectTab(tab) {
   });
 }
 const showEditModal = ref(false);
+const showCategoryModal = ref(false);
 const saving = ref(false);
 const formError = ref('');
 
@@ -157,6 +162,7 @@ async function refreshScreenQuietly() {
     // vezérelve: a kiadásokéval ellentétben nincs sorbanállítása, tehát
     // nincs mit visszajátszani — a csendes újratöltés a teljes helyreállása.
     paymentsStore.refreshQuietly(route.params.id),
+    categoriesStore.refreshQuietly(route.params.id),
   ]);
 }
 
@@ -185,13 +191,14 @@ watch(
 );
 
 onMounted(() => {
-  // Ez a képernyő három cache-kulcsból mutat adatot: magából az eseményből, a
-  // kiadáslistájából és a névjegyzékből (a nevek). Az offline sáv pontosan
-  // ezekre néz, és semmi másra — egy korábban megnyitott, MÁS esemény elavult
-  // kulcsa itt nem állíthat semmit (lásd `stores/offline.js` `setVisibleKeys`).
+  // Ez a képernyő öt cache-kulcsból mutat adatot: az eseményből, a kiadáslistájából,
+  // a kategóriákból, a kiegyenlítésekből és a névjegyzékből (a nevek). Az offline
+  // sáv pontosan ezekre néz, és semmi másra — egy korábban megnyitott, MÁS esemény
+  // elavult kulcsa itt nem állíthat semmit (lásd `stores/offline.js` `setVisibleKeys`).
   offlineStore.setVisibleKeys([
     eventCacheKey(route.params.id),
     expensesCacheKey(route.params.id),
+    categoriesCacheKey(route.params.id),
     settlementPaymentsCacheKey(route.params.id),
     PEOPLE_CACHE_KEY,
   ]);
@@ -218,6 +225,7 @@ onMounted(() => {
   // ide a rá vonatkozó üzeneteket), tehát külön feliratkozás nem kell — csak
   // a kezdeti lista.
   paymentsStore.fetchPayments(route.params.id);
+  categoriesStore.fetchCategories(route.params.id);
 
   load();
 
@@ -230,6 +238,7 @@ onUnmounted(() => {
   // nézetén, amíg annak `fetchPayments`-e le nem fut (ugyanaz a szabály,
   // amit a kiadás-store `unsubscribe`-ja követ).
   paymentsStore.reset();
+  categoriesStore.reset();
   document.removeEventListener('visibilitychange', handleVisibility);
 });
 
@@ -285,6 +294,13 @@ async function handleDelete() {
             </span>
           </div>
           <div class="event-detail__actions">
+            <button
+              type="button"
+              class="btn btn--ghost btn--small"
+              @click="showCategoryModal = true"
+            >
+              Kategóriák
+            </button>
             <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
               Szerkesztés
             </button>
@@ -345,6 +361,13 @@ async function handleDelete() {
         :error-message="formError"
         @submit="handleEdit"
         @cancel="showEditModal = false"
+      />
+
+      <CategoryManagerModal
+        v-if="showCategoryModal"
+        :event-id="event.id"
+        :read-only="event.archived"
+        @close="showCategoryModal = false"
       />
     </template>
   </main>

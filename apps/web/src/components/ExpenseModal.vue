@@ -10,6 +10,7 @@ import {
 } from '@filler/shared';
 import { fetchRateWithCache } from '../offline/rates.js';
 import { roundRate, toDateInputValue } from '../utils/format.js';
+import CategoryPicker from './CategoryPicker.vue';
 
 const props = defineProps({
   event: { type: Object, required: true },
@@ -40,6 +41,7 @@ const exchangeRate = ref('1');
 const rateSource = ref('manual');
 const rateFetchedAt = ref(null);
 const sharedWithIds = ref([...props.event.participantIds]);
+const categoryIds = ref([]);
 
 const itemized = ref(false);
 /**
@@ -98,6 +100,7 @@ function snapshot() {
     currency: currency.value,
     exchangeRate: exchangeRate.value,
     sharedWithIds: [...sharedWithIds.value].sort(),
+    categoryIds: [...categoryIds.value].sort(),
     itemized: itemized.value,
     // A tételek CSAK tételes módban tartoznak a lenyomatba, mert a lenyomat
     // azt írja le, ami mentésre kerülne. Egyszerű módban a sorok a memóriában
@@ -131,6 +134,7 @@ function resetFromExpense(expense) {
     // őrizni.
     rateResolvedByForm.value = false;
     sharedWithIds.value = [...expense.sharedWithIds];
+    categoryIds.value = [...(expense.categoryIds ?? [])];
     itemized.value = Array.isArray(expense.items) && expense.items.length > 0;
     items.value = (expense.items ?? []).map((item) =>
       createItem({
@@ -150,6 +154,7 @@ function resetFromExpense(expense) {
     rateFetchedAt.value = null;
     rateResolvedByForm.value = false;
     sharedWithIds.value = [...props.event.participantIds];
+    categoryIds.value = [];
     itemized.value = false;
     items.value = [];
   }
@@ -451,6 +456,7 @@ function handleSubmit() {
       rateSource: rateSource.value,
       rateFetchedAt: rateSource.value === 'api' ? rateFetchedAt.value : undefined,
       sharedWithIds: sharedWithIds.value,
+      categoryIds: [...categoryIds.value],
       // Nem tételes módban a mező ELHAGYVA megy (undefined): a JSON-ból
       // kimarad, és a szerver ebből tudja, hogy nincs tételezés.
       items: itemized.value
@@ -589,15 +595,21 @@ onUnmounted(() => {
           </p>
         </fieldset>
 
-        <div class="field">
-          <label for="expense-description">Leírás</label>
-          <input
-            id="expense-description"
-            v-model="description"
-            type="text"
-            required
-            :disabled="saving"
-          />
+        <div class="modal__row">
+          <div class="field expense-modal__description">
+            <label for="expense-description">Leírás</label>
+            <input
+              id="expense-description"
+              v-model="description"
+              type="text"
+              required
+              :disabled="saving"
+            />
+          </div>
+          <div class="field expense-modal__categories">
+            <label>Kategória</label>
+            <CategoryPicker v-model="categoryIds" :event-id="event.id" :disabled="saving" />
+          </div>
         </div>
         <p v-if="fieldErrors.description" role="alert" class="field-error">
           {{ fieldErrors.description }}
@@ -863,6 +875,11 @@ onUnmounted(() => {
 
 .modal__row .expense-modal__rate-field {
   flex: 0 1 8.5rem;
+}
+
+.modal__row .expense-modal__description,
+.modal__row .expense-modal__categories {
+  min-width: 12rem;
 }
 
 .expense-modal__rate-refresh {

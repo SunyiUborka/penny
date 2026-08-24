@@ -53,6 +53,11 @@ const expenseSchema = new Schema(
         },
       ],
     },
+    categoryIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'Category' }],
+      required: true,
+      default: [],
+    },
     /**
      * `default: undefined` — enélkül a Mongoose üres tömböt írna a tétel
      * nélküli kiadásokba, a válaszséma pedig `min(1)`-et követel: a mai,
