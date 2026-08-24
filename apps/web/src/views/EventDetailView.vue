@@ -191,10 +191,10 @@ watch(
 );
 
 onMounted(() => {
-  // Ez a képernyő három cache-kulcsból mutat adatot: magából az eseményből, a
-  // kiadáslistájából és a névjegyzékből (a nevek). Az offline sáv pontosan
-  // ezekre néz, és semmi másra — egy korábban megnyitott, MÁS esemény elavult
-  // kulcsa itt nem állíthat semmit (lásd `stores/offline.js` `setVisibleKeys`).
+  // Ez a képernyő öt cache-kulcsból mutat adatot: az eseményből, a kiadáslistájából,
+  // a kategóriákból, a kiegyenlítésekből és a névjegyzékből (a nevek). Az offline
+  // sáv pontosan ezekre néz, és semmi másra — egy korábban megnyitott, MÁS esemény
+  // elavult kulcsa itt nem állíthat semmit (lásd `stores/offline.js` `setVisibleKeys`).
   offlineStore.setVisibleKeys([
     eventCacheKey(route.params.id),
     expensesCacheKey(route.params.id),
