@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { MAX_EXPENSE_CATEGORIES } from '@filler/shared';
 import CategoryTag from './CategoryTag.vue';
 import { useCategoriesStore } from '../stores/categories.js';
 import { useOfflineStore } from '../stores/offline.js';
@@ -59,6 +60,12 @@ const canCreate = computed(
 
 const optionCount = computed(() => matches.value.length + (canCreate.value ? 1 : 0));
 
+watch(optionCount, (count) => {
+  if (highlighted.value >= count) {
+    highlighted.value = 0;
+  }
+});
+
 function openPanel() {
   if (props.disabled) {
     return;
@@ -75,10 +82,18 @@ function closePanel() {
 }
 
 function toggle(id) {
-  const next = props.modelValue.includes(id)
-    ? props.modelValue.filter((item) => item !== id)
-    : [...props.modelValue, id];
-  emit('update:modelValue', next);
+  if (props.modelValue.includes(id)) {
+    emit(
+      'update:modelValue',
+      props.modelValue.filter((item) => item !== id),
+    );
+    return;
+  }
+  if (props.modelValue.length >= MAX_EXPENSE_CATEGORIES) {
+    createError.value = `Egy kiadásra legfeljebb ${MAX_EXPENSE_CATEGORIES} kategória tehető.`;
+    return;
+  }
+  emit('update:modelValue', [...props.modelValue, id]);
 }
 
 function remove(id) {
@@ -91,6 +106,10 @@ function remove(id) {
 async function createFromQuery() {
   const name = query.value.trim();
   if (!name || creating.value) {
+    return;
+  }
+  if (props.modelValue.length >= MAX_EXPENSE_CATEGORIES) {
+    createError.value = `Egy kiadásra legfeljebb ${MAX_EXPENSE_CATEGORIES} kategória tehető.`;
     return;
   }
   creating.value = true;
