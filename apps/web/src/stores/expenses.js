@@ -13,6 +13,7 @@ import { expensesCacheKey } from '../offline/cacheKeys.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 import { completedUploadCount, isSyncRunning } from '../offline/sync.js';
 import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
+import { useCategoriesStore } from './categories.js';
 import { useSettlementPaymentsStore } from './settlementPayments.js';
 
 /** Meddig van kiemelve egy frissen érkezett sor. */
@@ -437,6 +438,14 @@ export const useExpensesStore = defineStore('expenses', {
         return;
       }
 
+      if (message.type.startsWith('category.')) {
+        useCategoriesStore().applyStreamMessage(message);
+        if (message.type === 'category.deleted') {
+          this.detachCategory(message.categoryId);
+        }
+        return;
+      }
+
       if (message.type === 'expense.deleted') {
         this.removeExpense(message.expenseId);
         return;
@@ -497,6 +506,21 @@ export const useExpensesStore = defineStore('expenses', {
       this.freshIds.delete(id);
       clearTimeout(freshTimers.get(id));
       freshTimers.delete(id);
+    },
+
+    /**
+     * A törölt kategória lekapcsolása minden betöltött kiadásról. Ez a
+     * kliensoldali párja a szerver `$pull`-jának: a törlés EGY üzenetben jön
+     * (`category.deleted`), nem kiadásonként egy `expense.updated`-ben — ötven
+     * kiadásnál az ötven üzenet lenne.
+     * @param {string} categoryId
+     */
+    detachCategory(categoryId) {
+      this.expenses = this.expenses.map((expense) =>
+        expense.categoryIds?.includes(categoryId)
+          ? { ...expense, categoryIds: expense.categoryIds.filter((id) => id !== categoryId) }
+          : expense,
+      );
     },
 
     /**
