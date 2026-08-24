@@ -245,7 +245,7 @@ async function handleDelete(expense) {
             <td data-label="Leírás" class="expense-table__description">
               {{ expense.description }}
               <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
-              <span v-if="categoriesOf(expense).length" class="expense-table__categories">
+              <span class="expense-table__categories">
                 <CategoryTag
                   v-for="category in categoriesOf(expense)"
                   :key="category.id"
@@ -438,9 +438,21 @@ async function handleDelete(expense) {
 
 .expense-table__categories {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: var(--space-1);
+  height: 1.15rem;
   margin-top: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+}
+
+.expense-table__categories::-webkit-scrollbar {
+  display: none;
 }
 
 .expense-table__shared {
