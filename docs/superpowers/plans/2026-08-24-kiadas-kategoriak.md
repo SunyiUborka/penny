@@ -1335,7 +1335,7 @@ Ez a terv legnagyobb egyedi darabja. Többértékű, kereshető választó: a ki
 
 ```vue
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import CategoryTag from './CategoryTag.vue';
 import { useCategoriesStore } from '../stores/categories.js';
 import { useOfflineStore } from '../stores/offline.js';
@@ -1358,6 +1358,10 @@ const query = ref('');
 const highlighted = ref(0);
 const creating = ref(false);
 const createError = ref('');
+
+watch(query, () => {
+  highlighted.value = 0;
+});
 
 const selected = computed(() =>
   props.modelValue.map((id) => categoriesStore.byId(id)).filter(Boolean),
@@ -1447,7 +1451,7 @@ function activate(index) {
     toggle(matches.value[index].id);
     return;
   }
-  if (canCreate.value) {
+  if (index === matches.value.length && canCreate.value) {
     createFromQuery();
   }
 }
