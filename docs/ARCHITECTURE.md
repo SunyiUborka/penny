@@ -158,6 +158,23 @@ kiadás-lekérdezésre szűrőt kellene akasztani, és egy elfelejtett szűrő
 azonnal hamis végösszeget adna. Részletes terv:
 [`superpowers/specs/2026-08-21-tartozas-kiegyenlites-design.md`](superpowers/specs/2026-08-21-tartozas-kiegyenlites-design.md).
 
+### Category
+
+Egy esemény kiadás-kategóriája. `eventId`, `name` (max 32 karakter), `color`
+(a hat kulcs egyike: `indigo`, `plum`, `teal`, `rust`, `olive`, `slate`).
+
+A név eseményen belül egyedi, `collation: { locale: 'hu', strength: 1 }`
+mellett — ez a kisbetűt és az ékezetet is egybemossa, tehát „Étel" és „etel"
+ütközik. Szándékosan szigorúbb, mint a `Person` `strength: 2`-je.
+
+A kategória törlése előbb `$pull`-lal leszedi magát az esemény összes
+kiadásáról, és csak utána törli a dokumentumot — fordítva a kiadásokon egy
+már nem létező kategóriára mutató id maradna. Az esemény törlése a
+kategóriáit is elviszi.
+
+A kiadás `categoryIds` mezője ezekre hivatkozik (`default: []`, legfeljebb 10,
+duplikátum nélkül), és **nem** befolyásolja az elszámolást.
+
 Fontos üzleti szabályok, amiket a modell/service réteg kényszerít ki:
 
 - **Person törlés blokkolva**, ha a személy bármely esemény résztvevője,
@@ -529,6 +546,10 @@ maga is hibát dobna fejlesztéskor.
 | `POST`   | `/api/events/:id/expenses`            | ✓       | Új kiadás                                        |
 | `PATCH`  | `/api/expenses/:id`                   | ✓       | Kiadás szerkesztése                              |
 | `DELETE` | `/api/expenses/:id`                   | ✓       | Kiadás törlése                                   |
+| `GET`    | `/api/events/:id/categories`          | ✓       | Esemény kategóriái, névsorban                    |
+| `POST`   | `/api/events/:id/categories`          | ✓       | Új kategória (`name`, `color`)                   |
+| `PATCH`  | `/api/categories/:id`                 | ✓       | Átnevezés vagy átszínezés                        |
+| `DELETE` | `/api/categories/:id`                 | ✓       | Törlés, a kiadásokról lekapcsolva                |
 | `GET`    | `/api/events/:id/settlement-payments` | ✓       | Esemény kiegyenlítései                           |
 | `POST`   | `/api/events/:id/settlement-payments` | ✓       | Új kiegyenlítés                                  |
 | `PATCH`  | `/api/settlement-payments/:id`        | ✓       | Kiegyenlítés szerkesztése                        |
@@ -581,7 +602,10 @@ belsejét kell kicserélni, a felületét nem.
 Üzenettípusok — mindhárom a `expenseStreamMessageSchema` (shared) szerint
 validálva **kimenetkor és bejövetkor is**, ahogy a rendes HTTP határátlépések:
 `expense.created`, `expense.updated` (a teljes kiadással), `expense.deleted`
-(csak az azonosítóval).
+(csak az azonosítóval). Valamint a kategóriákat: `category.created`,
+`category.updated`, `category.deleted` — a törlés **egyetlen** üzenet, nem
+kiadásonként egy `expense.updated`, a kliens maga kapcsolja le az azonosítót a
+betöltött kiadásokról.
 
 Két dolog kell ahhoz, hogy a stream a `web` szerver proxyján át is éljen:
 20 mp-enkénti heartbeat komment, és a proxy `undici: { bodyTimeout: 0,
@@ -664,12 +688,13 @@ egyaránt aktív, nem natív-specifikus. Két object store egy közös adatbázi
 
 - **`cache`**: a szervertől kapott olvasások legutóbbi állapota, kulcsonként
   (`fetchWithCache` írja). Kulcsok: `events`, `people`, `expenses:<eseményId>`,
-  `settlement-payments:<eseményId>`, `event:<eseményId>` és
-  `rate:<deviza>:<deviza>`. A kulcsok alakja **egy
+  `settlement-payments:<eseményId>`, `categories:<eseményId>`, `event:<eseményId>`
+  és `rate:<deviza>:<deviza>`. A kulcsok alakja **egy
   helyen**, az `offline/cacheKeys.js`-ben él (a `rate:` kulcsokat az
   `offline/rates.js` képzi, azokat a sáv nem követi) — a store-ok és a
   nézetek is innen kérik, mert mindkét oldal ugyanezekre a kulcsokra
-  hivatkozik (lásd 10.1, „mit követ a sáv”).
+  hivatkozik (lásd 10.1, „mit követ a sáv”). A kategória-**írás** szándékosan
+  nem jár az outboxon: offline a kategórialisták csak olvasható.
 - **`outbox`**: a még fel nem töltött kiadás-módosítások, `pending`/`failed`
   státusszal.
 
