@@ -15,12 +15,13 @@ function serializeItem(item) {
  * @param {import('mongoose').Document} doc
  */
 function serialize(doc) {
-  const { _id, __v, eventId, payerId, sharedWithIds, items, ...rest } = doc.toObject();
+  const { _id, __v, eventId, payerId, sharedWithIds, categoryIds, items, ...rest } = doc.toObject();
   return {
     id: _id.toString(),
     eventId: eventId.toString(),
     payerId: payerId.toString(),
     sharedWithIds: sharedWithIds.map(String),
+    categoryIds: (categoryIds ?? []).map(String),
     // Üres/hiányzó tétellistánál a mezőt KI SEM írjuk: a válaszséma az
     // `items`-et opcionálisnak, de nem üresnek fogadja el — a tételezés
     // hiányát a mező elhagyása jelenti.
@@ -97,6 +98,14 @@ export async function deleteExpenseById(id) {
  */
 export function deleteAllForEvent(eventId) {
   return ExpenseModel.deleteMany({ eventId });
+}
+
+/**
+ * @param {string} eventId
+ * @param {string} categoryId
+ */
+export function detachCategory(eventId, categoryId) {
+  return ExpenseModel.updateMany({ eventId }, { $pull: { categoryIds: categoryId } });
 }
 
 /**
