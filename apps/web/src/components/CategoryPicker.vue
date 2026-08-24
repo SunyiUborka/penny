@@ -196,34 +196,38 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       @click="openPanel"
       @focus="openPanel"
     >
-      <CategoryTag
-        v-for="category in selected"
-        :key="category.id"
-        :name="category.name"
-        :color="category.color"
-        small
-      >
-        <button
-          type="button"
-          class="cat-picker__remove"
-          :aria-label="`${category.name} levétele`"
-          :disabled="disabled"
-          @click.stop="remove(category.id)"
+      <div class="cat-picker__values">
+        <CategoryTag
+          v-for="category in selected"
+          :key="category.id"
+          :name="category.name"
+          :color="category.color"
+          small
         >
-          ×
-        </button>
-      </CategoryTag>
-      <input
-        v-if="open"
-        ref="inputRef"
-        v-model="query"
-        type="text"
-        class="cat-picker__input"
-        aria-label="Kategória keresése"
-        :disabled="disabled"
-        @click.stop
-      />
-      <span v-else-if="selected.length === 0" class="cat-picker__placeholder">Nincs kategória</span>
+          <button
+            type="button"
+            class="cat-picker__remove"
+            :aria-label="`${category.name} levétele`"
+            :disabled="disabled"
+            @click.stop="remove(category.id)"
+          >
+            ×
+          </button>
+        </CategoryTag>
+        <input
+          v-if="open"
+          ref="inputRef"
+          v-model="query"
+          type="text"
+          class="cat-picker__input"
+          aria-label="Kategória keresése"
+          :disabled="disabled"
+          @click.stop
+        />
+        <span v-else-if="selected.length === 0" class="cat-picker__placeholder">
+          Nincs kategória
+        </span>
+      </div>
       <span class="cat-picker__caret" aria-hidden="true">▾</span>
     </div>
 
@@ -280,12 +284,41 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
 .cat-picker__control {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  min-height: 2.6rem;
-  padding: 0.35em 0.6em;
+  gap: var(--space-2);
+  padding: 0.5em 0.6em;
   border-bottom: 2px solid var(--rule);
+  line-height: normal;
   cursor: text;
+}
+
+.cat-picker__control::before {
+  content: '\00a0';
+  flex: 0 0 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.cat-picker__values {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+}
+
+.cat-picker__values > * {
+  flex: 0 0 auto;
+}
+
+.cat-picker__values::-webkit-scrollbar {
+  display: none;
 }
 
 .cat-picker__control.is-open,
@@ -300,13 +333,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
 }
 
 .cat-picker__input {
-  flex: 1;
-  min-width: 4rem;
+  flex: 1 0 5rem;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 1rem;
+  line-height: normal;
   outline: none;
 }
 
@@ -314,9 +348,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
   flex: 1;
   color: var(--ink-soft);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .cat-picker__caret {
+  flex: 0 0 auto;
   color: var(--ink-soft);
   font-size: 0.8rem;
 }

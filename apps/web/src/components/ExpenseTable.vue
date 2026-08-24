@@ -6,7 +6,7 @@ import CategoryTag from './CategoryTag.vue';
 import { useCategoriesStore } from '../stores/categories.js';
 import ExpenseModal from './ExpenseModal.vue';
 import RowMenu from './RowMenu.vue';
-import { formatDate } from '../utils/format.js';
+import { formatDate, formatDateWithoutYear } from '../utils/format.js';
 import { isNativeApp } from '../utils/platform.js';
 import { attachPullToRefresh } from '../utils/pullToRefresh.js';
 
@@ -241,18 +241,22 @@ async function handleDelete(expense) {
             @click="openEditModal(expense)"
             @keydown.enter="openEditModal(expense)"
           >
-            <td data-label="Dátum" class="money">{{ formatDate(expense.date) }}</td>
+            <td data-label="Dátum" class="money" :title="formatDate(expense.date)">
+              {{ formatDateWithoutYear(expense.date) }}
+            </td>
             <td data-label="Leírás" class="expense-table__description">
               {{ expense.description }}
               <span v-if="expense.pending" class="expense-table__pending-badge">függőben</span>
-              <span v-if="categoriesOf(expense).length" class="expense-table__categories">
-                <CategoryTag
-                  v-for="category in categoriesOf(expense)"
-                  :key="category.id"
-                  :name="category.name"
-                  :color="category.color"
-                  small
-                />
+              <span class="expense-table__categories">
+                <span class="expense-table__cat-scroll">
+                  <CategoryTag
+                    v-for="category in categoriesOf(expense)"
+                    :key="category.id"
+                    :name="category.name"
+                    :color="category.color"
+                    small
+                  />
+                </span>
               </span>
             </td>
             <td data-label="Kifizette">{{ participantName(expense.payerId) }}</td>
@@ -437,10 +441,37 @@ async function handleDelete(expense) {
 }
 
 .expense-table__categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+  position: relative;
+  display: block;
+  height: 1.15rem;
   margin-top: var(--space-1);
+}
+
+.expense-table__cat-scroll {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+}
+
+.expense-table__cat-scroll > * {
+  flex: 0 0 auto;
+}
+
+.expense-table__cat-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.expense-table__table th:nth-child(2) {
+  min-width: 13rem;
 }
 
 .expense-table__shared {

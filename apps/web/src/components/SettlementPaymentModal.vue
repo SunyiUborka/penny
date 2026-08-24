@@ -408,23 +408,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(30, 42, 34, 0.45);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: var(--space-4);
-  overflow-y: auto;
-  z-index: 10;
-}
-
 .modal {
   width: min(520px, 100%);
-  max-height: 90vh;
-  margin-top: var(--space-6);
-  overflow-y: auto;
 }
 
 .modal__row {
