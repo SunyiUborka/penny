@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { personIdSchema } from './money.js';
 import { expenseResponseSchema } from './expense.js';
 import { settlementPaymentResponseSchema } from './settlementPayment.js';
+import { categoryResponseSchema } from './category.js';
 
 /**
  * Az élő (SSE) frissítés üzenetformátuma. Ugyanez a séma validál a backenden
@@ -26,4 +27,7 @@ export const eventStreamMessageSchema = z.discriminatedUnion('type', [
     payment: settlementPaymentResponseSchema,
   }),
   z.object({ type: z.literal('settlementPayment.deleted'), paymentId: personIdSchema }),
+  z.object({ type: z.literal('category.created'), category: categoryResponseSchema }),
+  z.object({ type: z.literal('category.updated'), category: categoryResponseSchema }),
+  z.object({ type: z.literal('category.deleted'), categoryId: personIdSchema }),
 ]);
