@@ -40,6 +40,7 @@
   --space-4: 1rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  color-scheme: light;
 }
 
 /* Sötétmód: rendszer preferencia alapján, kézi felülírással (data-theme). */
@@ -64,10 +65,12 @@
     --cat-rust: #d69a6e;
     --cat-olive: #a8bd72;
     --cat-slate: #9fb0bb;
+    color-scheme: dark;
   }
 }
 
 :root[data-theme='light'] {
+  color-scheme: light;
   --paper: #edeee6;
   --paper-raised: #f7f7f2;
   --ink: #1e2a22;
@@ -90,6 +93,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --paper: #1a2420;
   --paper-raised: #222f28;
   --ink: #e9e7dc;
@@ -356,6 +360,33 @@ button {
   border-color: var(--stamp);
   color: var(--stamp);
   background: var(--paper-raised);
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ledger-table th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid var(--ink);
+}
+
+.ledger-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.ledger-table .align-right {
+  text-align: right;
 }
 
 .modal-backdrop {

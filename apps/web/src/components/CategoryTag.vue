@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { categoryColorStyle } from '../utils/categoryColor.js';
 
 const props = defineProps({
   name: { type: String, required: true },
@@ -7,7 +8,7 @@ const props = defineProps({
   small: { type: Boolean, required: false, default: false },
 });
 
-const style = computed(() => ({ '--cat-color': `var(--cat-${props.color})` }));
+const style = computed(() => categoryColorStyle(props.color));
 </script>
 
 <template>
