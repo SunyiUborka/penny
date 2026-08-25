@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CATEGORY_COLORS, MAX_CATEGORY_NAME_LENGTH } from '@filler/shared';
+import { isCategoryColor, MAX_CATEGORY_NAME_LENGTH } from '@filler/shared';
 
 const { Schema } = mongoose;
 
@@ -7,7 +7,17 @@ const categorySchema = new Schema(
   {
     eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true },
     name: { type: String, required: true, trim: true, maxlength: MAX_CATEGORY_NAME_LENGTH },
-    color: { type: String, required: true, enum: CATEGORY_COLORS },
+    color: {
+      type: String,
+      required: true,
+      validate: [
+        {
+          validator: isCategoryColor,
+          message:
+            'A szín a paletta egyik kulcsa vagy egy #rrggbb alakú hexadecimális érték lehet.',
+        },
+      ],
+    },
   },
   { strict: 'throw', timestamps: true },
 );

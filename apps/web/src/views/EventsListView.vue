@@ -242,33 +242,6 @@ async function toggleArchived(event) {
   color: var(--ink-soft);
 }
 
-.ledger-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.ledger-table th {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 2px solid var(--ink);
-}
-
-.ledger-table td {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--rule);
-  vertical-align: middle;
-}
-
-.ledger-table .align-right {
-  text-align: right;
-}
-
 .events__row {
   cursor: pointer;
 }
