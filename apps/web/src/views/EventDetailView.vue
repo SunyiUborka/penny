@@ -22,6 +22,7 @@ import RowMenu from '../components/RowMenu.vue';
 import CategoryManagerModal from '../components/CategoryManagerModal.vue';
 import ExpenseTable from '../components/ExpenseTable.vue';
 import SettlementPanel from '../components/SettlementPanel.vue';
+import StatisticsPanel from '../components/StatisticsPanel.vue';
 import { formatDate } from '../utils/format.js';
 import { computeEventSettlement } from '../utils/settlement.js';
 import { eventStatusBadge, eventStatusStampClass } from '../utils/eventStatus.js';
@@ -44,12 +45,15 @@ const loading = ref(true);
  * @type {import('vue').Ref<string>}
  */
 const loadError = ref('');
-const activeTab = computed(() => (route.params.tab === 'elszamolas' ? 'settlement' : 'expenses'));
+const TAB_SLUGS = { expenses: 'kiadasok', settlement: 'elszamolas', statistics: 'statisztika' };
+const TAB_NAMES = Object.fromEntries(Object.entries(TAB_SLUGS).map(([name, slug]) => [slug, name]));
+
+const activeTab = computed(() => TAB_NAMES[route.params.tab] ?? 'expenses');
 
 function selectTab(tab) {
   router.replace({
     name: 'event-detail',
-    params: { id: route.params.id, tab: tab === 'settlement' ? 'elszamolas' : 'kiadasok' },
+    params: { id: route.params.id, tab: TAB_SLUGS[tab] },
   });
 }
 const showEditModal = ref(false);
@@ -348,19 +352,36 @@ async function handleDelete() {
         >
           Elszámolás
         </button>
+        <button
+          id="tab-statistics"
+          type="button"
+          role="tab"
+          aria-controls="panel-event"
+          :aria-selected="activeTab === 'statistics'"
+          class="ledger-tabs__tab"
+          :class="{ 'is-active': activeTab === 'statistics' }"
+          @click="selectTab('statistics')"
+        >
+          Statisztika
+        </button>
       </nav>
 
       <section
         id="panel-event"
         class="event-detail__panel"
         role="tabpanel"
-        :aria-labelledby="activeTab === 'expenses' ? 'tab-expenses' : 'tab-settlement'"
+        :aria-labelledby="`tab-${activeTab}`"
       >
         <ExpenseTable
           v-if="activeTab === 'expenses'"
           :event="event"
           :people="peopleStore.people"
           @refresh="refreshScreenQuietly"
+        />
+        <StatisticsPanel
+          v-else-if="activeTab === 'statistics'"
+          :event="event"
+          :people="peopleStore.people"
         />
         <SettlementPanel v-else :event="event" :people="peopleStore.people" />
       </section>
