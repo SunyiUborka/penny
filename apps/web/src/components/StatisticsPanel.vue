@@ -56,16 +56,34 @@ const maxPaidMinor = computed(() =>
   Math.max(1, ...stats.value.people.flatMap((row) => [row.paidMinor, row.owedMinor])),
 );
 
-const busiestDay = computed(() => {
-  const days = stats.value.days;
-  if (days.length === 0) {
-    return null;
+function niceStep(max) {
+  const rough = max / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const normalised = rough / magnitude;
+  const step =
+    normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 2.5 ? 2.5 : normalised <= 5 ? 5 : 10;
+  return step * magnitude;
+}
+
+const dayScale = computed(() => {
+  const max = maxDayMinor.value;
+  const step = niceStep(max);
+  const top = Math.ceil(max / step) * step;
+  const steps = [];
+  for (let value = 0; value <= top + 0.5; value += step) {
+    steps.push(Math.round(value));
   }
-  return days.reduce((best, day) => (day.baseAmountMinor > best.baseAmountMinor ? day : best));
+  return { top, steps };
 });
+
+const plainNumber = new Intl.NumberFormat('hu-HU');
 
 function widthOf(amountMinor, maxMinor) {
   return `${Math.max(0, (amountMinor / maxMinor) * 100)}%`;
+}
+
+function scaleHeight(amountMinor) {
+  return `${Math.max(0, (amountMinor / dayScale.value.top) * 100)}%`;
 }
 
 function dayLabel(date) {
@@ -159,19 +177,34 @@ function date2hu(date) {
       <section class="receipt stats__block">
         <span class="eyebrow">Naponta</span>
         <h2>Melyik nap vitte el</h2>
-        <div class="stats__cols">
-          <div v-for="row in stats.days" :key="row.date" class="stats__col" :title="dayTitle(row)">
-            <span
-              v-if="busiestDay && row.date === busiestDay.date"
-              class="stats__col-cap money"
-              :style="{ bottom: `calc(${widthOf(row.baseAmountMinor, maxDayMinor)} + 4px)` }"
+        <div class="stats__plot">
+          <div class="stats__rules" aria-hidden="true">
+            <div
+              v-for="step in dayScale.steps"
+              :key="step"
+              class="stats__rule"
+              :class="{ 'stats__rule--base': step === 0 }"
+              :style="{ bottom: scaleHeight(step) }"
             >
-              {{ huf(row.baseAmountMinor) }}
-            </span>
-            <span
-              class="stats__col-fill"
-              :style="{ height: widthOf(row.baseAmountMinor, maxDayMinor) }"
-            />
+              <span>{{ plainNumber.format(step) }}</span>
+            </div>
+          </div>
+          <div class="stats__cols">
+            <div
+              v-for="row in stats.days"
+              :key="row.date"
+              class="stats__col"
+              tabindex="0"
+              role="img"
+              :aria-label="dayTitle(row)"
+            >
+              <span class="stats__readoff" :style="{ bottom: scaleHeight(row.baseAmountMinor) }">
+                <span class="stats__readoff-value money">
+                  {{ plainNumber.format(row.baseAmountMinor) }}
+                </span>
+              </span>
+              <span class="stats__col-fill" :style="{ height: scaleHeight(row.baseAmountMinor) }" />
+            </div>
           </div>
         </div>
         <div class="stats__col-axis">
@@ -213,9 +246,15 @@ function date2hu(date) {
               </tr>
             </tbody>
           </table>
-          <p class="stats__legend">
-            Zöld: amit a saját zsebéből kifizetett. Szürke: ami az osztozásból rá esik. A kettő
-            különbségét az Elszámolás fül rendezi.
+          <p class="stats__key">
+            <span class="stats__key-item">
+              <span class="stats__key-swatch" />
+              Fizetett
+            </span>
+            <span class="stats__key-item">
+              <span class="stats__key-swatch stats__key-swatch--owed" />
+              Ráeső rész
+            </span>
           </p>
         </section>
 
@@ -228,22 +267,19 @@ function date2hu(date) {
                 <th>Pénznem</th>
                 <th class="align-right">Eredetiben</th>
                 <th class="align-right">Forintban</th>
-                <th class="align-right">Tétel</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in stats.currencies" :key="row.currency">
-                <td>{{ row.currency }}</td>
+                <td>
+                  {{ row.currency }}
+                  <span class="stats__sub">{{ row.expenseCount }} tétel</span>
+                </td>
                 <td class="align-right money">{{ original(row) }}</td>
                 <td class="align-right money">{{ huf(row.baseAmountMinor) }}</td>
-                <td class="align-right money">{{ row.expenseCount }}</td>
               </tr>
             </tbody>
           </table>
-          <p class="stats__legend">
-            A forintérték a kiadás saját, korabeli árfolyamán — ugyanaz a szám, amiből az elszámolás
-            számol.
-          </p>
         </section>
       </div>
     </template>
@@ -378,43 +414,117 @@ function date2hu(date) {
   color: var(--ink-soft);
 }
 
+.stats__plot {
+  --plot-pad: 4.6rem;
+  position: relative;
+  height: 168px;
+  margin-top: var(--space-6);
+  padding-left: var(--plot-pad);
+}
+
+.stats__rules {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stats__rule {
+  position: absolute;
+  left: var(--plot-pad);
+  right: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.stats__rule--base {
+  border-top-color: var(--rule-strong);
+}
+
+.stats__rule span {
+  position: absolute;
+  left: calc(-1 * var(--plot-pad));
+  top: -0.62em;
+  width: calc(var(--plot-pad) - 0.6rem);
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.62rem;
+  color: var(--ink-soft);
+}
+
 .stats__cols {
+  position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 4px;
-  height: 150px;
-  border-bottom: 1px solid var(--rule);
+  gap: 5px;
+  height: 100%;
 }
 
 .stats__col {
-  position: relative;
   flex: 1;
   min-width: 0;
   height: 100%;
   display: flex;
   align-items: flex-end;
+  cursor: default;
+}
+
+.stats__col:focus-visible {
+  outline: 2px solid var(--forint);
+  outline-offset: 2px;
 }
 
 .stats__col-fill {
   width: 100%;
-  max-width: 24px;
+  max-width: 26px;
   margin: 0 auto;
   border-radius: 4px 4px 0 0;
   background: var(--forint);
+  transition: background-color 0.12s ease;
 }
 
-.stats__col-cap {
+.stats__col:hover .stats__col-fill,
+.stats__col:focus-visible .stats__col-fill {
+  background: var(--ink);
+}
+
+.stats__readoff {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.62rem;
-  white-space: nowrap;
+  left: calc(-1 * var(--plot-pad));
+  right: 0;
+  display: flex;
+  align-items: center;
+  transform: translateY(50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.stats__readoff::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--forint);
+}
+
+.stats__col:hover .stats__readoff,
+.stats__col:focus-visible .stats__readoff {
+  opacity: 1;
+}
+
+.stats__readoff-value {
+  width: calc(var(--plot-pad) - 0.6rem);
+  margin-right: 0.6rem;
+  text-align: right;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--forint);
+  background: var(--paper-raised);
 }
 
 .stats__col-axis {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   margin-top: var(--space-2);
+  padding-left: 4.6rem;
 }
 
 .stats__col-axis span {
@@ -452,10 +562,50 @@ function date2hu(date) {
   width: 45%;
 }
 
+.stats__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.stats__key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stats__key-swatch {
+  width: 1.4rem;
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: var(--forint);
+}
+
+.stats__key-swatch--owed {
+  background: var(--rule-strong);
+}
+
+.stats__sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+}
+
 .stats__split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
   gap: var(--space-6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats__col-fill,
+  .stats__readoff {
+    transition: none;
+  }
 }
 
 @media (max-width: 640px) {
