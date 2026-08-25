@@ -7,7 +7,33 @@ export const MAX_CATEGORY_NAME_LENGTH = 32;
 
 export const MAX_EXPENSE_CATEGORIES = 10;
 
-export const categoryColorSchema = z.enum(CATEGORY_COLORS);
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isHexCategoryColor(value) {
+  return typeof value === 'string' && HEX_COLOR_PATTERN.test(value);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isCategoryColor(value) {
+  return (
+    (typeof value === 'string' && CATEGORY_COLORS.includes(value)) || isHexCategoryColor(value)
+  );
+}
+
+export const categoryColorSchema = z
+  .string()
+  .refine(
+    isCategoryColor,
+    'A szín a paletta egyik kulcsa vagy egy #rrggbb alakú hexadecimális érték lehet.',
+  )
+  .transform((value) => (isHexCategoryColor(value) ? value.toLowerCase() : value));
 
 const categoryNameSchema = z
   .string()

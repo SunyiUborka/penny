@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { CATEGORY_COLORS } from '@filler/shared';
 import CategoryTag from './CategoryTag.vue';
+import { categoryColorInputValue, categoryColorStyle } from '../utils/categoryColor.js';
 import { useCategoriesStore } from '../stores/categories.js';
 import { useExpensesStore } from '../stores/expenses.js';
 
@@ -133,12 +134,25 @@ async function create() {
               type="button"
               class="category-manager__swatch"
               :class="{ 'is-active': color === category.color }"
-              :style="{ '--cat-color': `var(--cat-${color})` }"
+              :style="categoryColorStyle(color)"
               :aria-label="`${category.name} színe: ${color}`"
               :aria-pressed="color === category.color"
               :disabled="readOnly || busyId === category.id"
               @click="recolor(category, color)"
             />
+            <label
+              class="category-manager__swatch category-manager__swatch--custom"
+              :class="{ 'is-active': !CATEGORY_COLORS.includes(category.color) }"
+              :style="categoryColorStyle(category.color)"
+            >
+              <span class="visually-hidden">{{ category.name }} egyedi színe</span>
+              <input
+                type="color"
+                :value="categoryColorInputValue(category.color)"
+                :disabled="readOnly || busyId === category.id"
+                @change="recolor(category, $event.target.value)"
+              />
+            </label>
           </span>
           <button
             type="button"
@@ -213,6 +227,49 @@ async function create() {
 .category-manager__swatch.is-active {
   outline: 2px solid var(--ink);
   outline-offset: 1px;
+}
+
+.category-manager__swatch--custom {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  background:
+    var(--cat-color),
+    conic-gradient(
+      from 0.25turn,
+      var(--cat-rust),
+      var(--cat-olive),
+      var(--cat-teal),
+      var(--cat-indigo),
+      var(--cat-plum),
+      var(--cat-rust)
+    );
+}
+
+.category-manager__swatch--custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.category-manager__swatch--custom input:disabled {
+  cursor: not-allowed;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .category-manager__create {
