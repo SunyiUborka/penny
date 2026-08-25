@@ -304,26 +304,26 @@ async function handleDelete() {
               {{ event.defaultCurrency }}
             </span>
           </div>
-          <div class="event-detail__actions">
-            <RowMenu label="Esemény műveletei">
-              <button
-                type="button"
-                class="btn btn--ghost btn--small"
-                @click="showCategoryModal = true"
-              >
-                Kategóriák
-              </button>
-              <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
-                Szerkesztés
-              </button>
-              <button type="button" class="btn btn--ghost btn--small" @click="toggleArchived">
-                {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
-              </button>
-              <button type="button" class="btn btn--danger btn--small" @click="handleDelete">
-                Törlés
-              </button>
-            </RowMenu>
-          </div>
+        </div>
+        <div class="event-detail__menu">
+          <RowMenu label="Esemény műveletei">
+            <button
+              type="button"
+              class="btn btn--ghost btn--small"
+              @click="showCategoryModal = true"
+            >
+              Kategóriák
+            </button>
+            <button type="button" class="btn btn--ghost btn--small" @click="showEditModal = true">
+              Szerkesztés
+            </button>
+            <button type="button" class="btn btn--ghost btn--small" @click="toggleArchived">
+              {{ event.archived ? 'Visszaállítás' : 'Archiválás' }}
+            </button>
+            <button type="button" class="btn btn--danger btn--small" @click="handleDelete">
+              Törlés
+            </button>
+          </RowMenu>
         </div>
       </header>
 
@@ -418,11 +418,19 @@ async function handleDelete() {
 }
 
 .event-detail__header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: start;
   gap: var(--space-6);
   margin-bottom: var(--space-2);
+  padding-right: 3rem;
+}
+
+.event-detail__menu {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
 }
 
 .event-detail__meta {
@@ -435,11 +443,6 @@ async function handleDelete() {
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-3);
-}
-
-.event-detail__actions {
-  display: flex;
-  gap: var(--space-2);
 }
 
 .event-detail__stamps {
