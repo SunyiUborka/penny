@@ -13,10 +13,10 @@ import { AppError } from '../errors.js';
  * ugyanazon a napon a korábban cache-elt érték jön vissza. Ha az élő hívás
  * hibázik, a legutóbbi cache-elt érték jön vissza source:"cache" jelzéssel;
  * ha az sincs, hibázik.
- * @param {{ apiUrl: string, apiKey: string, from: string, to: string }} params
+ * @param {{ baseUrl: string, from: string, to: string }} params
  * @returns {Promise<RateResult>}
  */
-export async function getRate({ apiUrl, apiKey, from, to }) {
+export async function getRate({ baseUrl, from, to }) {
   if (from === to) {
     return { rate: '1', fetchedAt: new Date(), source: 'manual' };
   }
@@ -28,7 +28,7 @@ export async function getRate({ apiUrl, apiKey, from, to }) {
   }
 
   try {
-    const live = await fetchRateFromApi({ apiUrl, apiKey, from, to });
+    const live = await fetchRateFromApi({ baseUrl, from, to });
     await rateCacheRepository.upsertForDate({ from, to, date, ...live });
     return { rate: live.rate, fetchedAt: live.fetchedAt, source: 'api' };
   } catch (apiError) {

@@ -79,7 +79,7 @@ flowchart LR
     Web -->|"statikus fájlok"| Dist["dist/ (Vite build)"]
     Web -->|"/api/* proxy"| Api["api service\nFastify backend\n(apps/api)"]
     Api --> Mongo[("MongoDB")]
-    Api -->|"árfolyam lekérés"| CurrencyApi["getgeoapi.com"]
+    Api -->|"árfolyam lekérés"| CurrencyApi["api.frankfurter.dev"]
 ```
 
 Fejlesztői módban (`compose.dev.yaml`) ehelyett a Vite dev szerver fut
@@ -336,15 +336,18 @@ kényszerít ki és amiket **ESLint szabály is véd** (lásd
 
 ## 7. Árfolyam-lekérés és cache
 
-Az árfolyamot a [getgeoapi.com](https://www.getgeoapi.com/) külső API-ból
-kérdezi le a rendszer, napi Mongo cache-eléssel és hibatűrő fallbackkel.
+Az árfolyamot a [Frankfurter](https://frankfurter.dev/) külső API-ból kérdezi
+le a rendszer (`GET /v2/rate/{base}/{quote}`, API kulcs nélkül), napi Mongo
+cache-eléssel és hibatűrő fallbackkel. A szolgáltatónak nincs átváltó
+végpontja: csak az árfolyamot adja, az összeget a `convertMinorAmount` váltja
+át helyben.
 
 ```mermaid
 sequenceDiagram
     participant C as Kliens (ExpenseModal)
     participant R as rateService.getRate
     participant Cache as RateCache (Mongo)
-    participant Ext as getgeoapi.com
+    participant Ext as api.frankfurter.dev
 
     C->>R: GET /api/rates?from=EUR&to=HUF
     alt from === to
@@ -383,8 +386,11 @@ Részletek:
   gyakorlatban a napi kulcs miatt ez ritkán aktiválódik ténylegesen —
   inkább biztonsági háló a felhalmozódás ellen.
 - `currencyApiClient.fetchRateFromApi`: 5 másodperces `AbortController`
-  timeout, 1 újrapróbálkozás exponenciális backoffal (500 ms), a válasz
-  Zod-validált (`geoApiConvertResponseSchema`).
+  timeout, 1 újrapróbálkozás 500 ms után — de `400`/`404`/`422` válaszra nem,
+  mert az a valutapárról szóló végleges verdikt. A válasz Zod-validált
+  (`frankfurterRateSchema`), az árfolyam számként jön, és `decimal.js`-szel
+  válik decimális stringgé (`exchangeRateStringSchema`), hogy a tárolt és
+  továbbadott érték sose legyen lebegőpontos.
 - Ha az élő hívás hibázik **és** nincs semmilyen korábbi cache-elt érték,
   a hívás `502 RATE_UNAVAILABLE` hibával bukik — a frontend ekkor kézi
   árfolyam-bevitelre vált (`ExpenseModal.vue` `rateError` ág).
