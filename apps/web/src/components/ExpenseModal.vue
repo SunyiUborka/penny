@@ -9,7 +9,7 @@ import {
   SUPPORTED_CURRENCIES,
 } from '@filler/shared';
 import { fetchRateWithCache } from '../offline/rates.js';
-import { roundRate, toDateInputValue } from '../utils/format.js';
+import { roundRate, todayLocalDateString, toDateInputValue } from '../utils/format.js';
 import CategoryPicker from './CategoryPicker.vue';
 
 const props = defineProps({
@@ -24,13 +24,6 @@ const emit = defineEmits(['submit', 'cancel']);
 
 const isEditMode = computed(() => props.expense !== null);
 const modalRef = ref(null);
-
-function todayLocalDateString() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 const date = ref(todayLocalDateString());
 const description = ref('');
@@ -345,7 +338,7 @@ async function fetchRate() {
   rateError.value = '';
   rateEstimated.value = false;
   try {
-    const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY);
+    const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY, date.value);
     exchangeRate.value = roundRate(result.rate);
     rateFetchedAt.value = result.fetchedAt;
     rateSource.value = 'api';
@@ -365,7 +358,7 @@ async function fetchRate() {
   }
 }
 
-watch(currency, () => {
+watch([currency, date], () => {
   fetchRate();
 });
 
@@ -471,7 +464,7 @@ function handleSubmit() {
     // argumentum az, ami a szervernek megy, ez pedig soha nem mehet oda.
     // Külön objektumban ez szerkezetileg garantált — egy payload-mezőt
     // előbb-utóbb valaki továbbküldene.
-    { rateResolvedByForm: rateResolvedByForm.value },
+    { rateResolvedByForm: rateResolvedByForm.value, rateEstimated: rateEstimated.value },
   );
 }
 

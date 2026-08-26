@@ -123,7 +123,7 @@ function openEditModal(expense) {
 
 /**
  * @param {object} input a szervernek szánt kiadás-payload
- * @param {{ rateResolvedByForm: boolean }} rateMeta kliensoldali kísérő tény
+ * @param {{ rateResolvedByForm: boolean, rateEstimated: boolean }} rateMeta kliensoldali kísérő tény
  * az árfolyam eredetéről (lásd `ExpenseModal.vue`) — a payloadtól
  * szándékosan elválasztva, mert a szervernek nem küldhető
  */
