@@ -6,8 +6,7 @@ const envSchema = z.object({
   MONGO_URL: z.string().min(1),
   APP_PASSWORD: z.string().min(1),
   SESSION_SECRET: z.string().min(16),
-  CURRENCY_API_KEY: z.string().min(1),
-  CURRENCY_API_URL: z.string().url().default('https://api.getgeoapi.com/v2/currency/convert'),
+  FRANKFURTER_URL: z.string().url().default('https://api.frankfurter.dev'),
 });
 
 /**

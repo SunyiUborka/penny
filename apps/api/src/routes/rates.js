@@ -16,12 +16,7 @@ export default function ratesRoutes(fastify) {
     { schema: { querystring: rateQuerySchema, response: { 200: rateResponseSchema } } },
     (request) => {
       const { from, to } = request.query;
-      return rateService.getRate({
-        apiUrl: fastify.env.CURRENCY_API_URL,
-        apiKey: fastify.env.CURRENCY_API_KEY,
-        from,
-        to,
-      });
+      return rateService.getRate({ baseUrl: fastify.env.FRANKFURTER_URL, from, to });
     },
   );
 }

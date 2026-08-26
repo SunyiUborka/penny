@@ -28,7 +28,7 @@ kinek mennyit fizet a kiegyenlítéshez.
 - Élő frissítés: ha valaki más eszközön vesz fel, módosít vagy töröl egy
   kiadást vagy kiegyenlítést, az a nyitva hagyott listában oldalfrissítés
   nélkül megjelenik (Server-Sent Events). A toolbar halk jelzője mutatja, áll-e a kapcsolat.
-- Árfolyam-lekérés külső API-ból (getgeoapi.com), napi Mongo cache-eléssel és
+- Árfolyam-lekérés külső API-ból (Frankfurter, kulcs nélkül), napi Mongo cache-eléssel és
   hibatűrő fallbackkel a legutóbbi ismert árfolyamra.
 - Elszámolás fül: egyenlegtábla és minimalizált "ki fizet kinek mennyit"
   lista (fizetési jegyzék). A két fülnek külön URL-je van
@@ -391,19 +391,18 @@ meghibásodik.
 
 ## Környezeti változók
 
-| Változó            | Leírás                                                               |
-| ------------------ | -------------------------------------------------------------------- |
-| `MONGO_URL`        | Mongo kapcsolati string. Compose-ban `mongodb://mongo:27017/filler`. |
-| `APP_PASSWORD`     | A megosztott jelszó, ember-olvashatóan (lásd fentebb).               |
-| `SESSION_SECRET`   | Hosszú, random string a session cookie aláírásához.                  |
-| `CURRENCY_API_KEY` | getgeoapi.com API kulcs az árfolyam-lekéréshez.                      |
-| `CURRENCY_API_URL` | getgeoapi.com convert végpont URL-je.                                |
-| `NODE_ENV`         | `development` / `production`.                                        |
-| `PORT`             | Backend HTTP port (Docker-en belül, alapértelmezetten 3000).         |
-| `BACKUP_UID/GID`   | Milyen uid/gid-del írjon a `backup` service (lásd lentebb).          |
+| Változó           | Leírás                                                               |
+| ----------------- | -------------------------------------------------------------------- |
+| `MONGO_URL`       | Mongo kapcsolati string. Compose-ban `mongodb://mongo:27017/filler`. |
+| `APP_PASSWORD`    | A megosztott jelszó, ember-olvashatóan (lásd fentebb).               |
+| `SESSION_SECRET`  | Hosszú, random string a session cookie aláírásához.                  |
+| `FRANKFURTER_URL` | A Frankfurter árfolyam-API alap URL-je (kulcs nem kell).             |
+| `NODE_ENV`        | `development` / `production`.                                        |
+| `PORT`            | Backend HTTP port (Docker-en belül, alapértelmezetten 3000).         |
+| `BACKUP_UID/GID`  | Milyen uid/gid-del írjon a `backup` service (lásd lentebb).          |
 
 Lásd `.env.example` a kommentekkel ellátott sablonért. Éles titok (jelszó,
-session secret, API kulcs) sosem kerül a repóba — csak az `.env` fájlba,
+session secret) sosem kerül a repóba — csak az `.env` fájlba,
 ami `.gitignore`-olt.
 
 **Elérés LAN IP-n vagy Tailscale-en, TLS nélkül:** a session cookie a
