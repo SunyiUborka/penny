@@ -12,7 +12,7 @@ import { fetchWithCache, refreshIntoCache } from '../offline/cache.js';
 import { expensesCacheKey } from '../offline/cacheKeys.js';
 import { enqueue, listByEvent, refreshCounts } from '../offline/outbox.js';
 import { completedUploadCount, isSyncRunning } from '../offline/sync.js';
-import { isEstimatedRate, RateResolutionError, withFreshRate } from '../offline/rates.js';
+import { RateResolutionError, withFreshRate } from '../offline/rates.js';
 import { useCategoriesStore } from './categories.js';
 import { useSettlementPaymentsStore } from './settlementPayments.js';
 
@@ -541,17 +541,18 @@ export const useExpensesStore = defineStore('expenses', {
     /**
      * @param {string} eventId
      * @param {object} input
-     * @param {{ rateResolvedByForm?: boolean }} [rateMeta] kliensoldali kísérő
-     * tény az árfolyam eredetéről (lásd `ExpenseModal.vue`). Létrehozásnál az
-     * alapérték `true`: egy új kiadás árfolyamát mindig az űrlap oldja fel,
-     * nincs miből örökölni.
+     * @param {{ rateResolvedByForm?: boolean, rateEstimated?: boolean }} [rateMeta]
+     * kliensoldali kísérő tény az árfolyam eredetéről (lásd
+     * `ExpenseModal.vue`). A `rateResolvedByForm` alapértéke létrehozásnál
+     * `true`: egy új kiadás árfolyamát mindig az űrlap oldja fel, nincs miből
+     * örökölni.
      */
     async createExpense(eventId, input, rateMeta = {}) {
       const clientId = crypto.randomUUID();
       const rateResolvedByForm = rateMeta.rateResolvedByForm ?? true;
       let body = { ...input, clientId };
-      // Ha az űrlapon BECSÜLT árfolyam van (az űrlap oldotta fel, de nem mai
-      // — lásd `isEstimatedRate`), a mentés pillanatában újra feloldjuk.
+      // Ha az űrlapon BECSÜLT árfolyam van (az űrlap oldotta fel, de a szerver
+      // `source: "stale"`-t adott), a mentés pillanatában újra feloldjuk.
       // Enélkül a `withFreshRate` csak az outbox-on átmenő tételekre futott:
       // egy közvetlenül sikeres POST teljesen kihagyta, tehát egy három napos
       // becslés VÉGLEGESEN tárolt értékké vált — pending jelzés, `≈` és
@@ -564,11 +565,11 @@ export const useExpensesStore = defineStore('expenses', {
       // ráadásul egy ilyen felesleges kör átmeneti hibája sorba állítana egy
       // amúgy tökéletes árfolyammal mentendő kiadást.
       //
-      // Az `isEstimatedRate` önmagában NEM elég szűrő: egy öröklött, korabeli
-      // árfolyam ugyanúgy „öreg", mint egy elavult becslés. Ezért a
-      // `rateResolvedByForm` az első feltétel — az mondja meg, hogy egyáltalán
-      // a MI feloldásunkról beszélünk-e (végső re-review U2).
-      if (rateResolvedByForm && isEstimatedRate(body)) {
+      // A `rateEstimated` önmagában NEM elég szűrő: a `rateResolvedByForm` az
+      // első feltétel — az mondja meg, hogy egyáltalán a MI feloldásunkról
+      // beszélünk-e, nem egy öröklött, korabeli árfolyamról (végső
+      // re-review U2).
+      if (rateResolvedByForm && rateMeta.rateEstimated) {
         try {
           body = await withFreshRate(body);
         } catch (error) {
@@ -622,11 +623,12 @@ export const useExpensesStore = defineStore('expenses', {
     /**
      * @param {string} id
      * @param {object} input
-     * @param {{ rateResolvedByForm?: boolean }} [rateMeta] kliensoldali kísérő
-     * tény az árfolyam eredetéről (lásd `ExpenseModal.vue`). Szerkesztésnél az
-     * alapérték `false`: ha a hívó nem mondja, hogy az árfolyamot most oldotta
-     * fel, akkor a kiadás korabeli árfolyamát őrizzük meg — abból a puszta
-     * adatból ez ugyanis nem derül ki (végső re-review U2).
+     * @param {{ rateResolvedByForm?: boolean, rateEstimated?: boolean }} [rateMeta]
+     * kliensoldali kísérő tény az árfolyam eredetéről (lásd
+     * `ExpenseModal.vue`). A `rateResolvedByForm` alapértéke szerkesztésnél
+     * `false`: ha a hívó nem mondja, hogy az árfolyamot most oldotta fel,
+     * akkor a kiadás korabeli árfolyamát őrizzük meg — abból a puszta adatból
+     * ez ugyanis nem derül ki (végső re-review U2).
      */
     async updateExpense(id, input, rateMeta = {}) {
       const rateResolvedByForm = rateMeta.rateResolvedByForm ?? false;
@@ -642,9 +644,8 @@ export const useExpensesStore = defineStore('expenses', {
       //
       // Ha a szerkesztés NEM nyúlt az árfolyamhoz (`rateResolvedByForm`
       // hamis), itt nincs mit tenni: az űrlapon a kiadás korabeli árfolyama
-      // van, azt meg kell őrizni — az `isEstimatedRate` erre igazat adna
-      // (öreg árfolyam), és pont ez volt a hiba (végső re-review U2).
-      if (rateResolvedByForm && isEstimatedRate(body)) {
+      // van, azt meg kell őrizni (végső re-review U2).
+      if (rateResolvedByForm && rateMeta.rateEstimated) {
         try {
           body = await withFreshRate(body);
         } catch (error) {

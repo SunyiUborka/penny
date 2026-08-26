@@ -28,8 +28,10 @@ kinek mennyit fizet a kiegyenlítéshez.
 - Élő frissítés: ha valaki más eszközön vesz fel, módosít vagy töröl egy
   kiadást vagy kiegyenlítést, az a nyitva hagyott listában oldalfrissítés
   nélkül megjelenik (Server-Sent Events). A toolbar halk jelzője mutatja, áll-e a kapcsolat.
-- Árfolyam-lekérés külső API-ból (Frankfurter, kulcs nélkül), napi Mongo cache-eléssel és
-  hibatűrő fallbackkel a legutóbbi ismert árfolyamra.
+- Árfolyam-lekérés külső API-ból (Frankfurter, kulcs nélkül) **a kiadás
+  dátumára**: egy visszadátumozott nyugta a korabeli árfolyamával váltódik át,
+  nem a maival. Mongo cache (valutapár + nap) és hibatűrő fallback a legutóbbi
+  ismert árfolyamra.
 - Elszámolás fül: egyenlegtábla és minimalizált "ki fizet kinek mennyit"
   lista (fizetési jegyzék). A két fülnek külön URL-je van
   (`/events/<id>/kiadasok`, `/events/<id>/elszamolas`), tehát megosztható és

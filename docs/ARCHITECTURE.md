@@ -337,10 +337,18 @@ kényszerít ki és amiket **ESLint szabály is véd** (lásd
 ## 7. Árfolyam-lekérés és cache
 
 Az árfolyamot a [Frankfurter](https://frankfurter.dev/) külső API-ból kérdezi
-le a rendszer (`GET /v2/rate/{base}/{quote}`, API kulcs nélkül), napi Mongo
+le a rendszer (`GET /v2/rate/{base}/{quote}`, API kulcs nélkül), Mongo
 cache-eléssel és hibatűrő fallbackkel. A szolgáltatónak nincs átváltó
 végpontja: csak az árfolyamot adja, az összeget a `convertMinorAmount` váltja
 át helyben.
+
+A lekérés **a kiadás dátumára** szól, nem a mai napra: a `/api/rates` opcionális
+`date` paraméterrel hívható, és a szerver ezt a napot adja tovább a
+szolgáltatónak (`?date=ÉÉÉÉ-HH-NN`, 1948-ig visszamenőleg). Egy visszadátumozott
+nyugta így a korabeli árfolyamával váltódik át, nem a maival — 200 EUR
+2020-03-15-én 67 744 Ft a 338,72-es korabeli árfolyamon, a mai 362,64-gyel
+72 528 Ft lett volna. Jövőbeli dátumot a szerver a mai napra vág, mert arra még
+nincs árfolyam.
 
 ```mermaid
 sequenceDiagram
@@ -349,25 +357,25 @@ sequenceDiagram
     participant Cache as RateCache (Mongo)
     participant Ext as api.frankfurter.dev
 
-    C->>R: GET /api/rates?from=EUR&to=HUF
+    C->>R: GET /api/rates?from=EUR&to=HUF&date=2020-03-15
     alt from === to
         R-->>C: {rate: "1", source: "manual"}
     else
-        R->>Cache: findForDate(from, to, ma)
-        alt van mai cache
-            Cache-->>R: cachedToday
+        R->>Cache: findForDate(from, to, kért nap)
+        alt van cache a kért napra
+            Cache-->>R: cached
             R-->>C: {rate, source: "cache"}
-        else nincs mai cache
+        else nincs
             R->>Ext: fetchRateFromApi (5s timeout, 1 retry exp. backoffal)
             alt sikeres
                 Ext-->>R: rate
                 R->>Cache: upsertForDate(...)
                 R-->>C: {rate, source: "api"}
             else API hiba
-                R->>Cache: findLatest(from, to)
-                alt van korábbi cache
+                R->>Cache: findFallback(from, to, kért nap)
+                alt van legfeljebb 7 napos korábbi cache
                     Cache-->>R: fallback rate
-                    R-->>C: {rate, source: "cache"}
+                    R-->>C: {rate, source: "stale"}
                 else nincs semmi
                     R-->>C: 502 RATE_UNAVAILABLE
                 end
@@ -378,13 +386,22 @@ sequenceDiagram
 
 Részletek:
 
-- `RateCache` egy `(from, to, date)` hármasra `unique` indexelt kollekció —
-  **naponta legfeljebb egyszer** hívja ki az élő API-t egy adott
-  valutapárra, utána ugyanazon a napon a cache-elt érték jön vissza.
+- `RateCache` egy `(from, to, date)` hármasra `unique` indexelt kollekció, ahol
+  a `date` a **kért nap** — egy (valutapár, nap) párra legfeljebb egyszer megy
+  ki élő hívás, utána a cache-elt érték jön vissza. A dátum a kulcs harmadik
+  eleme volt már a napi cache idején is, ezért a visszadátumozott lekérés nem
+  igényelt sémaváltást.
 - A cache dokumentumokra egy 24 órás TTL index is fut
-  (`expireAfterSeconds: RATE_CACHE_TTL_SECONDS` a `createdAt` mezőn), de a
-  gyakorlatban a napi kulcs miatt ez ritkán aktiválódik ténylegesen —
-  inkább biztonsági háló a felhalmozódás ellen.
+  (`expireAfterSeconds: RATE_CACHE_TTL_SECONDS` a `createdAt` mezőn), a
+  korábbi napokra szóló soroknál is. Egy korabeli árfolyam ugyan
+  megváltoztathatatlan, tehát örökre cache-elhető lenne, de a lejárat két okból
+  megmarad: kvóta nincs, tehát egy újralekérés ingyen van, a TTL viszont
+  frissen tartja a `findFallback` merítési körét.
+- `findFallback` szándékosan **nem** a legutóbbi cache-elt sort adja, hanem a
+  kért napot legfeljebb 7 nappal megelőző utolsót. Enélkül egy
+  visszadátumozott kiadás miatt eltárolt 2020-as árfolyam kiszolgálhatna egy
+  mai kérést (a `fetchedAt` ugyanis friss lenne rajta), vagyis egy provider-hiba
+  6 évvel korábbi árfolyamot csúsztathatna be a mai kiadásba.
 - `currencyApiClient.fetchRateFromApi`: 5 másodperces `AbortController`
   timeout, 1 újrapróbálkozás 500 ms után — de `400`/`404`/`422` válaszra nem,
   mert az a valutapárról szóló végleges verdikt. A válasz Zod-validált
@@ -394,6 +411,17 @@ Részletek:
 - Ha az élő hívás hibázik **és** nincs semmilyen korábbi cache-elt érték,
   a hívás `502 RATE_UNAVAILABLE` hibával bukik — a frontend ekkor kézi
   árfolyam-bevitelre vált (`ExpenseModal.vue` `rateError` ág).
+- A válasz `source` mezője négy értéket vehet fel: `manual` (azonos pénznem),
+  `api` (élő hívás a kért napra), `cache` (a kért napra cache-elt, végleges
+  érték) és `stale` (a provider hibázott, egy MÁS napra szóló árfolyammal
+  szolgáltunk ki). **A `≈` becslés-jelölést kizárólag a `stale` váltja ki** —
+  a kliens (`offline/rates.js`) nem a `fetchedAt` napjából következtet rá, mert
+  egy korabeli árfolyamnál a lekérés ideje semmit nem mond a helyességről.
+  A `withFreshRate` ugyanezért nem is véglegesít `stale` árfolyamot: a tétel
+  sorban marad, amíg valódi árfolyam nem érkezik.
+- A kliensoldali cache pénznempáronként EGY bejegyzést tart a jelenkori
+  árfolyamra (hogy offline is legyen legutóbb ismert érték), a korábbi napokra
+  szólót viszont nap szerint kulcsolja, mert az az adott napra végleges.
 - A kliensoldali `ExpenseModal.vue` az árfolyamot csak **előnézetre** (a
   HUF-ban várható alapösszeg megjelenítésére) és a kiadás rögzítésekor
   elmentendő `exchangeRate`/`rateSource` mezőkhöz használja — a tényleges
