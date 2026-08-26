@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { exchangeRateStringSchema } from './money.js';
 
-export const rateSourceSchema = z.enum(['api', 'cache', 'manual']);
+export const rateSourceSchema = z.enum(['api', 'cache', 'stale', 'manual']);
 
 export const rateResponseSchema = z.object({
   rate: exchangeRateStringSchema,

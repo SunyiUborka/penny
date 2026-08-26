@@ -20,3 +20,14 @@ export function parseDateOnly(dateOnlyString) {
 export function todayDateOnly() {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * @param {string} dateOnlyString ÉÉÉÉ-HH-NN
+ * @param {number} days
+ * @returns {string} ÉÉÉÉ-HH-NN
+ */
+export function shiftDateOnly(dateOnlyString, days) {
+  const date = new Date(`${dateOnlyString}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}

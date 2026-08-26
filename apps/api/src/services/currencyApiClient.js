@@ -64,11 +64,12 @@ async function requestOnce(url) {
 }
 
 /**
- * @param {{ baseUrl: string, from: string, to: string }} params
+ * @param {{ baseUrl: string, from: string, to: string, date?: string }} params
  * @returns {Promise<{ rate: string, fetchedAt: Date }>}
  */
-export async function fetchRateFromApi({ baseUrl, from, to }) {
-  const url = `${baseUrl.replace(/\/+$/, '')}/v2/rate/${from}/${to}`;
+export async function fetchRateFromApi({ baseUrl, from, to, date }) {
+  const path = `${baseUrl.replace(/\/+$/, '')}/v2/rate/${from}/${to}`;
+  const url = date ? `${path}?date=${date}` : path;
 
   const attempts = 2;
   let lastError;

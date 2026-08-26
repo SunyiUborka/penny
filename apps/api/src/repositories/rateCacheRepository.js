@@ -1,4 +1,7 @@
 import { RateCacheModel } from '../models/rateCacheModel.js';
+import { shiftDateOnly } from '../utils/dateOnly.js';
+
+const FALLBACK_MAX_AGE_DAYS = 7;
 
 /**
  * @param {string} from
@@ -10,13 +13,16 @@ export function findForDate(from, to, date) {
 }
 
 /**
- * A legutóbb (bármelyik napra) cache-elt árfolyam egy valutapárra —
- * hibatűrő fallbackhez, ha az élő API hívás sikertelen.
  * @param {string} from
  * @param {string} to
+ * @param {string} date ÉÉÉÉ-HH-NN
  */
-export function findLatest(from, to) {
-  return RateCacheModel.findOne({ from, to }).sort({ fetchedAt: -1 });
+export function findFallback(from, to, date) {
+  return RateCacheModel.findOne({
+    from,
+    to,
+    date: { $lte: date, $gte: shiftDateOnly(date, -FALLBACK_MAX_AGE_DAYS) },
+  }).sort({ date: -1 });
 }
 
 /**

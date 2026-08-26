@@ -40,6 +40,16 @@ export function toDateInputValue(value) {
 }
 
 /**
+ * @returns {string} a mai nap ÉÉÉÉ-HH-NN alakban, helyi idő szerint
+ */
+export function todayLocalDateString() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/**
  * @param {string} rate
  * @returns {string}
  */

@@ -1,20 +1,34 @@
 import { z, ZodError } from 'zod';
 import { rateResponseSchema, SETTLEMENT_CURRENCY } from '@filler/shared';
 import { apiClient, ApiError } from '../api/client.js';
+import { todayLocalDateString } from '../utils/format.js';
 import { readCache, writeCache } from './cache.js';
 
 const cachedRateSchema = z.object({
   rate: z.string(),
   fetchedAt: z.coerce.date(),
+  estimated: z.boolean().optional(),
 });
 
 /**
+ * @param {string} date ÉÉÉÉ-HH-NN
+ * @returns {boolean}
+ */
+function isCurrentDate(date) {
+  return date >= todayLocalDateString();
+}
+
+/**
+ * A jelenkori árfolyam kulcsa pénznempáronként EGY bejegyzés, hogy offline is
+ * legyen legutóbb ismert érték; egy korábbi napra kért árfolyam viszont a nap
+ * szerint kulcsolódik, mert az adott napra végleges.
  * @param {string} from
  * @param {string} to
+ * @param {string} date ÉÉÉÉ-HH-NN
  * @returns {string}
  */
-function cacheKey(from, to) {
-  return `rate:${from}:${to}`;
+function cacheKey(from, to, date) {
+  return isCurrentDate(date) ? `rate:${from}:${to}` : `rate:${from}:${to}:${date}`;
 }
 
 /**
@@ -37,14 +51,20 @@ function isToday(date) {
  * meghatározni.
  * @param {string} from
  * @param {string} to
- * @returns {Promise<{ rate: string, fetchedAt: Date }>}
+ * @param {string} date ÉÉÉÉ-HH-NN
+ * @returns {Promise<{ rate: string, fetchedAt: Date, estimated: boolean }>}
  */
-export async function fetchFreshRate(from, to) {
-  const result = await apiClient.get(`/rates?from=${from}&to=${to}`, {
+export async function fetchFreshRate(from, to, date) {
+  const result = await apiClient.get(`/rates?from=${from}&to=${to}&date=${date}`, {
     schema: rateResponseSchema,
   });
+  const estimated = result.source === 'stale';
   try {
-    await writeCache(cacheKey(from, to), { rate: result.rate, fetchedAt: result.fetchedAt });
+    await writeCache(cacheKey(from, to, date), {
+      rate: result.rate,
+      fetchedAt: result.fetchedAt,
+      estimated,
+    });
   } catch (writeError) {
     // Ugyanaz a védett írás, mint az `offline/cache.js` `fetchWithCache`-ében
     // (és a `refreshIntoCache`-ében): egy írási hiba (betelt vagy megtagadott
@@ -55,7 +75,7 @@ export async function fetchFreshRate(from, to) {
     // árfolyam ott volt a kezünkben (végső review M9).
     console.error('Nem sikerült az árfolyamot a cache-be írni:', writeError);
   }
-  return { rate: result.rate, fetchedAt: result.fetchedAt };
+  return { rate: result.rate, fetchedAt: result.fetchedAt, estimated };
 }
 
 /**
@@ -63,23 +83,18 @@ export async function fetchFreshRate(from, to) {
  * jelzi, hogy becsült (elavult) árfolyamot adtunk vissza — a felület ezt `≈`
  * jelöléssel mutatja, a végleges érték a feltöltéskor dől el.
  *
- * A becslést a `fetchedAt` napja dönti el, nem a szerver válaszának `source`
- * mezője: a szerver naponta legfeljebb egyszer hív ki élő API-t egy adott
- * valutapárra, minden aznapi további lekérés `source: "cache"`-t ad vissza,
- * pedig ez a normál, egészséges eset — ha erre becslés-jelzést tennénk,
- * majdnem mindig látszódna a jelölés, elveszítve az értelmét. Az egyetlen
- * valóban elavult eset az, amikor a szerver saját élő hívása hibázott, és egy
- * korábbi napról származó tartalék árfolyamot adott vissza — ezt viszont a
- * `source` mező önmagában nem különbözteti meg az aznapi cache-től, csak a
- * `fetchedAt` napja árulja el.
+ * A becslést a szerver `source: "stale"` jelzése dönti el: a szerver akkor adja,
+ * ha a saját élő hívása hibázott, és egy MÁS napra cache-elt árfolyammal
+ * szolgált ki. Az aznapi `source: "cache"` a normál, egészséges eset, és a
+ * kért napra vonatkozó végleges árfolyamot adja — arra nem jár jelölés.
  * @param {string} from
  * @param {string} to
+ * @param {string} date ÉÉÉÉ-HH-NN
  * @returns {Promise<{ rate: string, fetchedAt: Date, estimated: boolean }>}
  */
-export async function fetchRateWithCache(from, to) {
+export async function fetchRateWithCache(from, to, date) {
   try {
-    const fresh = await fetchFreshRate(from, to);
-    return { ...fresh, estimated: !isToday(fresh.fetchedAt) };
+    return await fetchFreshRate(from, to, date);
   } catch (error) {
     // A cache.js `fetchWithCache`-ével azonos szabály: ha a szerver ténylegesen
     // válaszolt (ApiError) vagy a válasz alakja nem illik a sémára (ZodError),
@@ -89,51 +104,18 @@ export async function fetchRateWithCache(from, to) {
     if (error instanceof ApiError || error instanceof ZodError) {
       throw error;
     }
-    const cached = await readCache(cacheKey(from, to), cachedRateSchema);
+    const cached = await readCache(cacheKey(from, to, date), cachedRateSchema);
     if (!cached) {
       throw error;
     }
     return {
       rate: cached.value.rate,
       fetchedAt: cached.value.fetchedAt,
-      estimated: !isToday(cached.value.fetchedAt),
+      estimated:
+        (cached.value.estimated ?? false) ||
+        (isCurrentDate(date) && !isToday(cached.value.fetchedAt)),
     };
   }
-}
-
-/**
- * Igaz, ha a payloadban lévő árfolyam **becslés**: devizás a kiadás, az
- * árfolyam a szervertől jött (`api`), de nem a mai napról — vagyis pontosan
- * az az eset, amit a felület `≈`-vel jelöl (lásd a 10.3 szakaszt: a becslést
- * a `fetchedAt` NAPJA dönti el, nem a válasz `source` mezője).
- *
- * Ez a döntés szándékosan itt, az árfolyam-modulban él, és nem a hívóknál:
- * a „mi számít becslésnek" szabálynak egyetlen helye lehet, különben a
- * felület jelölése és a feltöltés újra-feloldása széttarthat.
- *
- * **Csak olyan árfolyamra értelmes, amit az űrlap maga oldott fel** (lásd
- * `ExpenseModal.vue` `rateResolvedByForm`). Egy szerkesztésre betöltött,
- * hónapokkal korábbi kiadás öröklött árfolyama ugyanígy `api` eredetű és
- * ugyanígy nem mai — ez a függvény tehát becslésnek látná, pedig az a kiadás
- * korabeli, végleges árfolyama. Ezért a hívóknak ELŐBB a
- * `rateResolvedByForm` tényt kell megkérdezniük, és csak azon belül ezt
- * (végső re-review U2).
- *
- * @param {{ currency: string, rateSource?: string, rateFetchedAt?: Date | string | null }} payload
- * @returns {boolean}
- */
-export function isEstimatedRate(payload) {
-  if (payload.currency === SETTLEMENT_CURRENCY || payload.rateSource !== 'api') {
-    return false;
-  }
-  if (!payload.rateFetchedAt) {
-    // Nem tudjuk, mikori az árfolyam — a zárt irányba tévedünk, és
-    // becslésnek tekintjük (inkább kérjük le újra, mint hogy egy ismeretlen
-    // korú érték maradjon véglegesként).
-    return true;
-  }
-  const fetchedAt = new Date(payload.rateFetchedAt);
-  return Number.isNaN(fetchedAt.getTime()) || !isToday(fetchedAt);
 }
 
 /**
@@ -219,9 +201,9 @@ export async function withFreshRate(payload) {
   if (payload.currency === SETTLEMENT_CURRENCY || payload.rateSource === 'manual') {
     return payload;
   }
+  let fresh;
   try {
-    const fresh = await fetchFreshRate(payload.currency, SETTLEMENT_CURRENCY);
-    return { ...payload, exchangeRate: fresh.rate, rateFetchedAt: fresh.fetchedAt };
+    fresh = await fetchFreshRate(payload.currency, SETTLEMENT_CURRENCY, payload.date);
   } catch (error) {
     if (error instanceof ApiError && isRateVerdict(error)) {
       // A szerver ténylegesen nemet mondott MAGÁRA AZ ÁRFOLYAMRA (pl. nem
@@ -242,6 +224,10 @@ export async function withFreshRate(payload) {
     // olyan kiadást, amit még fel sem küldtünk.
     throw new RateResolutionError(error);
   }
+  if (fresh.estimated) {
+    throw new RateResolutionError(new Error('A szerver csak becsült árfolyamot adott.'));
+  }
+  return { ...payload, exchangeRate: fresh.rate, rateFetchedAt: fresh.fetchedAt };
 }
 
 export { SETTLEMENT_CURRENCY };

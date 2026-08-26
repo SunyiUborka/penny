@@ -8,7 +8,7 @@ import {
   SUPPORTED_CURRENCIES,
 } from '@filler/shared';
 import { fetchRateWithCache } from '../offline/rates.js';
-import { roundRate, toDateInputValue } from '../utils/format.js';
+import { roundRate, todayLocalDateString, toDateInputValue } from '../utils/format.js';
 
 const props = defineProps({
   /**
@@ -29,13 +29,6 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'cancel']);
 
 const modalRef = ref(null);
-
-function todayLocalDateString() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 /** A sor azonosítója a `select`-ben: a páros maga. */
 function rowKey(row) {
@@ -135,7 +128,7 @@ async function fetchRate() {
   rateError.value = '';
   rateEstimated.value = false;
   try {
-    const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY);
+    const result = await fetchRateWithCache(currency.value, SETTLEMENT_CURRENCY, date.value);
     exchangeRate.value = roundRate(result.rate);
     rateFetchedAt.value = result.fetchedAt;
     rateSource.value = 'api';
@@ -148,7 +141,7 @@ async function fetchRate() {
   }
 }
 
-watch(currency, async () => {
+watch([currency, date], async () => {
   // Pénznemváltásnál a lekért árfolyam jön vissza: a korábbi kézi érték egy
   // MÁS pénznemhez tartozott, azt átvinni hiba lenne.
   await fetchRate();
