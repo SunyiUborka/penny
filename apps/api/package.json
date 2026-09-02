@@ -15,7 +15,7 @@
     "@filler/shared": "*",
     "argon2": "^0.41.1",
     "decimal.js": "^10.4.3",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.1",
     "fastify-plugin": "^5.0.1",
     "fastify-type-provider-zod": "^4.0.2",
     "mongoose": "^8.9.5",
